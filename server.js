@@ -32,8 +32,7 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/* ---------- STATIC FILES ---------- */
-app.use(express.static(path.join(__dirname, 'public')));
+/* ---------- STATIC UPLOADS (OK) ---------- */
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 /* ---------- AUTH ---------- */
@@ -231,11 +230,6 @@ app.post('/api/seller/csv-import', upload.single('file'), (req, res) => {
 
 /* ---------- ADMIN AREA ---------- */
 app.use('/api/admin', adminRequired, adminRoutes);
-
-/* ---------- SPA FALLBACK ---------- */
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
 
 /* ---------- START SERVER ---------- */
 app.listen(PORT, HOST, () => {
