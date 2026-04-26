@@ -1,4 +1,4 @@
-const { load, save } = require('../store');
+const { load, save } = require('./store');
 
 // USERS
 exports.getUsers = (req, res) => {
