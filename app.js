@@ -662,7 +662,7 @@ const I18N = {
 const RTL = ['ar'];
 
 /* ---------- CONFIG ---------- */
-const API = "https://afcarparts-com-895534.hostingersite.com/api";
+const API = "https://afcarparts-com.onrender.com/api";
 
 const LANGS = {
   en: 'English', de: 'Deutsch', fr: 'Francais',
@@ -769,7 +769,7 @@ function cupd(id, q) {
 async function apiReq(path, method, body, auth) {
   method = method || 'GET';
   const h = { 'Content-Type': 'application/json', 'Accept-Language': S.lang };
-  if (auth && S.token) h['Authorization'] = 'Bearer ' + S.token;
+  if (auth && S.token) h['Authorization'] = S.token;   // FIXED
   const opts = { method: method, headers: h };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(API + path, opts);
@@ -780,21 +780,12 @@ async function apiReq(path, method, body, auth) {
 
 async function apiForm(path, fd, auth) {
   const h = { 'Accept-Language': S.lang };
-  if (auth && S.token) h['Authorization'] = 'Bearer ' + S.token;
+  if (auth && S.token) h['Authorization'] = S.token;   // FIXED
   const res = await fetch(API + path, { method: 'POST', headers: h, body: fd });
   const d = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(d.error || 'HTTP ' + res.status);
   return d;
 }
-
-function logout() {
-  S.user = null;
-  S.token = null;
-  localStorage.removeItem('apa_user');
-  localStorage.removeItem('apa_token');
-  render('home');
-}
-
 /* ---------- ROUTER ---------- */
 const routes = {};
 function route(name, fn) { routes[name] = fn; }
