@@ -6,8 +6,8 @@ const multer = require('multer');
 const fs = require('fs');
 
 const adminRoutes = require('./admin.routes');
-const adminRequired = require('./admin.middleware');   
-const { load, save } = require('./store');             
+const adminRequired = require('./admin.middleware');
+const { load, save } = require('./store');
 
 const app = express();
 
@@ -15,14 +15,18 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const HOST = "0.0.0.0";
 
-/* ---------- HEALTH CHECK (Render Empfehlung) ---------- */
+/* ---------- HEALTH CHECK ---------- */
 app.get('/health', (req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
 /* ---------- CORS ---------- */
 app.use(cors({
-  origin: "https://afcarparts.com",
+  origin: [
+    "https://afcarparts.com",
+    "https://www.afcarparts.com",
+    "http://localhost:3000"
+  ],
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization", "Accept-Language"]
@@ -32,12 +36,13 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/* ---------- STATIC UPLOADS (OK) ---------- */
+/* ---------- STATIC UPLOADS ---------- */
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-/* ---------- AUTH ---------- */
+/* ---------- AUTH: REGISTER ---------- */
 app.post('/api/auth/register', (req, res) => {
   const { name, email, password, role, phone, country } = req.body || {};
+
   if (!email || !password) {
     return res.status(400).json({ error: 'Missing email or password' });
   }
@@ -51,6 +56,7 @@ app.post('/api/auth/register', (req, res) => {
     id: Date.now().toString(),
     name,
     email,
+    password, // Passwort speichern
     role: role || 'buyer',
     phone,
     country
@@ -59,35 +65,25 @@ app.post('/api/auth/register', (req, res) => {
   users.push(user);
   save('users', users);
 
-  return res.json({
-    user,
-    token: 'token-' + user.id
-  });
+  res.json({ user, token: 'token-' + user.id });
 });
 
+/* ---------- AUTH: LOGIN ---------- */
 app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body || {};
+
   if (!email || !password) {
     return res.status(400).json({ error: 'Missing email or password' });
   }
 
   const users = load('users');
-  const user = users.find(u => u.email === email);
+  const user = users.find(u => u.email === email && u.password === password);
 
   if (!user) {
     return res.status(400).json({ error: 'Invalid credentials' });
   }
 
-  return res.json({
-    user,
-    token: 'token-' + user.id
-  });
-});
-
-/* ---------- CATEGORIES ---------- */
-app.get('/api/admin/categories', (req, res) => {
-  const cats = load('categories');
-  res.json(cats);
+  res.json({ user, token: 'token-' + user.id });
 });
 
 /* ---------- PRODUCTS LIST ---------- */
@@ -201,8 +197,12 @@ app.post('/api/orders', (req, res) => {
   res.json({ success: true, order });
 });
 
-/* ---------- SELLER: ADD PRODUCT ---------- */
-app.post('/api/seller/products', (req, res) => {
+/* ---------- SELLER: ADD PRODUCT (GESCHÜTZT) ---------- */
+app.post('/api/seller/products', adminRequired, (req, res) => {
+  if (req.user.role !== "seller") {
+    return res.status(403).json({ error: "Seller only" });
+  }
+
   const p = req.body || {};
   if (!p.title || !p.price_usd) {
     return res.status(400).json({ error: 'Missing title or price' });
@@ -210,6 +210,8 @@ app.post('/api/seller/products', (req, res) => {
 
   const products = load('products');
   p.id = Date.now().toString();
+  p.seller_id = req.user.id;
+
   products.push(p);
   save('products', products);
 
@@ -224,12 +226,19 @@ if (!fs.existsSync(uploadsDir)) {
 
 const upload = multer({ dest: uploadsDir });
 
-app.post('/api/seller/csv-import', upload.single('file'), (req, res) => {
-  res.json({ success: true, message: 'CSV received (parsing not implemented in demo).' });
+app.post('/api/seller/csv-import', adminRequired, upload.single('file'), (req, res) => {
+  res.json({ success: true, message: 'CSV received (parsing not implemented).' });
 });
 
-/* ---------- ADMIN AREA ---------- */
+/* ---------- ADMIN AREA (GESCHÜTZT) ---------- */
 app.use('/api/admin', adminRequired, adminRoutes);
+
+/* ---------- FRONTEND FALLBACK (Render Fix) ---------- */
+app.use(express.static(path.join(__dirname, "public")));
+
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
 /* ---------- START SERVER ---------- */
 app.listen(PORT, HOST, () => {
