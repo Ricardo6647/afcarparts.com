@@ -1,5 +1,4 @@
-const { load } = require('../store');
-
+const { load, save } = require('./store');
 exports.adminRequired = (req, res, next) => {
   const token = req.headers.authorization || '';
   if (!token.startsWith('token-')) {
