@@ -6,8 +6,8 @@ const multer = require('multer');
 const fs = require('fs');
 
 const adminRoutes = require('./admin.routes');
-const adminRequired = require('./admin/middleware');
-const { load, save } = require('./store');
+const adminRequired = require('./admin.middleware');   
+const { load, save } = require('./store');             
 
 const app = express();
 
@@ -20,7 +20,7 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
-/* ---------- CORS (nur afcarparts.com) ---------- */
+/* ---------- CORS ---------- */
 app.use(cors({
   origin: "https://afcarparts.com",
   credentials: true,
