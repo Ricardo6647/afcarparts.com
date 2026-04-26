@@ -1,5 +1,6 @@
 const { load, save } = require('./store');
-exports.adminRequired = (req, res, next) => {
+
+module.exports = (req, res, next) => {
   const token = req.headers.authorization || '';
   if (!token.startsWith('token-')) {
     return res.status(401).json({ error: 'Unauthorized' });
