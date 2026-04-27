@@ -56,7 +56,7 @@ app.post('/api/auth/register', (req, res) => {
     id: Date.now().toString(),
     name,
     email,
-    password, // Passwort speichern
+    password,
     role: role || 'buyer',
     phone,
     country
@@ -197,7 +197,7 @@ app.post('/api/orders', (req, res) => {
   res.json({ success: true, order });
 });
 
-/* ---------- SELLER: ADD PRODUCT (GESCHÜTZT) ---------- */
+/* ---------- SELLER: ADD PRODUCT ---------- */
 app.post('/api/seller/products', adminRequired, (req, res) => {
   if (req.user.role !== "seller") {
     return res.status(403).json({ error: "Seller only" });
@@ -230,15 +230,8 @@ app.post('/api/seller/csv-import', adminRequired, upload.single('file'), (req, r
   res.json({ success: true, message: 'CSV received (parsing not implemented).' });
 });
 
-/* ---------- ADMIN AREA (GESCHÜTZT) ---------- */
+/* ---------- ADMIN AREA ---------- */
 app.use('/api/admin', adminRequired, adminRoutes);
-
-/* ---------- FRONTEND FALLBACK (Render Fix) ---------- */
-app.use(express.static(path.join(__dirname, "public")));
-
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
 
 /* ---------- START SERVER ---------- */
 app.listen(PORT, HOST, () => {
