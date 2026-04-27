@@ -1,1 +1,102 @@
-[]
+[
+  {
+    "id": 1,
+    "name": "Toyota Corolla 1.8L Motor",
+    "category": 1,
+    "price": 850,
+    "condition": "Alt",
+    "location": "Nigeria",
+    "model": "Toyota Corolla 2008",
+    "description": "Gebrauchter Motor aus Ladipo Market, voll funktionsfähig."
+  },
+  {
+    "id": 2,
+    "name": "Honda Civic Automatikgetriebe",
+    "category": 2,
+    "price": 620,
+    "condition": "Alt",
+    "location": "Ghana",
+    "model": "Honda Civic 2010",
+    "description": "Import aus Japan, getestet und einsatzbereit."
+  },
+  {
+    "id": 3,
+    "name": "BMW 3er Bremsensatz",
+    "category": 3,
+    "price": 120,
+    "condition": "Neu",
+    "location": "EU",
+    "model": "BMW E90",
+    "description": "Kompletter Satz vorne und hinten, OEM‑Qualität."
+  },
+  {
+    "id": 4,
+    "name": "Mercedes C‑Klasse Stoßstange",
+    "category": 4,
+    "price": 250,
+    "condition": "Neu",
+    "location": "UK",
+    "model": "Mercedes W204",
+    "description": "Neue Stoßstange, unlackiert."
+  },
+  {
+    "id": 5,
+    "name": "Toyota Hilux Lichtmaschine",
+    "category": 5,
+    "price": 95,
+    "condition": "Neu",
+    "location": "China",
+    "model": "Toyota Hilux 2015",
+    "description": "Aftermarket‑Teil, hohe Lebensdauer."
+  },
+  {
+    "id": 6,
+    "name": "Nissan Patrol Offroad‑Reifen",
+    "category": 6,
+    "price": 180,
+    "condition": "Neu",
+    "location": "Südamerika",
+    "model": "Nissan Patrol Y61",
+    "description": "Set aus 2 Reifen, All‑Terrain."
+  },
+  {
+    "id": 7,
+    "name": "VW Golf 6 Auspuffanlage",
+    "category": 7,
+    "price": 140,
+    "condition": "Alt",
+    "location": "Afrika",
+    "model": "VW Golf 6",
+    "description": "Gebrauchte Anlage, guter Zustand."
+  },
+  {
+    "id": 8,
+    "name": "Hyundai Elantra Kühler",
+    "category": 8,
+    "price": 75,
+    "condition": "Neu",
+    "location": "China",
+    "model": "Hyundai Elantra 2016",
+    "description": "Neuer Kühler, direkt aus Fabrik."
+  },
+  {
+    "id": 9,
+    "name": "Ford Ranger Luftfilter",
+    "category": 9,
+    "price": 20,
+    "condition": "Neu",
+    "location": "USA",
+    "model": "Ford Ranger 2014",
+    "description": "OEM‑Qualität, sofort lieferbar."
+  },
+  {
+    "id": 10,
+    "name": "Toyota Land Cruiser Stoßdämpfer",
+    "category": 10,
+    "price": 110,
+    "condition": "Neu",
+    "location": "Japan",
+    "model": "Land Cruiser 100",
+    "description": "Hochwertige Stoßdämpfer, langlebig."
+  }
+]
