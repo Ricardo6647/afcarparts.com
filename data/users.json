@@ -1,1 +1,41 @@
-[]
+[
+  {
+    "id": 1,
+    "username": "admin",
+    "password": "Lebjg8tc",
+    "role": "admin",
+    "email": "ziko.miguel@live.de",
+    "phone": "+0000000000",
+    "createdAt": "2024-01-01"
+  },
+  {
+    "id": 2,
+    "username": "buyer_ghana",
+    "password": "test123",
+    "role": "user",
+    "email": "buyer.ghana@example.com",
+    "phone": "+233245551234",
+    "location": "Ghana",
+    "createdAt": "2024-01-02"
+  },
+  {
+    "id": 3,
+    "username": "buyer_nigeria",
+    "password": "test123",
+    "role": "user",
+    "email": "buyer.nigeria@example.com",
+    "phone": "+2348023344556",
+    "location": "Nigeria",
+    "createdAt": "2024-01-03"
+  },
+  {
+    "id": 4,
+    "username": "buyer_usa",
+    "password": "test123",
+    "role": "user",
+    "email": "buyer.usa@example.com",
+    "phone": "+13135551212",
+    "location": "USA",
+    "createdAt": "2024-01-04"
+  }
+]
