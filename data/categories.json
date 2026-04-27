@@ -1,1 +1,12 @@
-[]
+[
+  { "id": 1, "name": "Motor" },
+  { "id": 2, "name": "Getriebe" },
+  { "id": 3, "name": "Bremsen" },
+  { "id": 4, "name": "Karosserie" },
+  { "id": 5, "name": "Elektrik" },
+  { "id": 6, "name": "Reifen & Räder" },
+  { "id": 7, "name": "Auspuff" },
+  { "id": 8, "name": "Kühlsystem" },
+  { "id": 9, "name": "Filter" },
+  { "id": 10, "name": "Fahrwerk" }
+]
