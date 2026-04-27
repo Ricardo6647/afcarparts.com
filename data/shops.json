@@ -1,1 +1,74 @@
-[]
+[
+  {
+    "id": 1,
+    "name": "Abossey Okai Auto Parts",
+    "country": "Nigeria",
+    "city": "Lagos",
+    "contact": "+234 802 123 4567",
+    "rating": 4.6,
+    "description": "Einer der größten Ersatzteilmärkte in Westafrika. Spezialisiert auf Toyota und Honda."
+  },
+  {
+    "id": 2,
+    "name": "Kantamanto Motors",
+    "country": "Ghana",
+    "city": "Accra",
+    "contact": "+233 24 555 8899",
+    "rating": 4.4,
+    "description": "Großer Händler für gebrauchte Motoren und Getriebe aus Japan und USA."
+  },
+  {
+    "id": 3,
+    "name": "Tokyo Auto Export",
+    "country": "Japan",
+    "city": "Tokyo",
+    "contact": "+81 3 1234 5678",
+    "rating": 4.8,
+    "description": "Exportiert geprüfte japanische Gebrauchtteile weltweit."
+  },
+  {
+    "id": 4,
+    "name": "Guangzhou Parts Factory",
+    "country": "China",
+    "city": "Guangzhou",
+    "contact": "+86 20 8888 9999",
+    "rating": 4.3,
+    "description": "Aftermarket‑Produktion für Lichtmaschinen, Kühler, Filter und Elektrik."
+  },
+  {
+    "id": 5,
+    "name": "Detroit Auto Supply",
+    "country": "USA",
+    "city": "Detroit",
+    "contact": "+1 313 555 1212",
+    "rating": 4.5,
+    "description": "OEM‑Teile für Ford, Chevrolet und Dodge."
+  },
+  {
+    "id": 6,
+    "name": "London Car Spares",
+    "country": "UK",
+    "city": "London",
+    "contact": "+44 20 7946 1234",
+    "rating": 4.2,
+    "description": "Spezialisiert auf europäische Fahrzeuge: BMW, Mercedes, VW."
+  },
+  {
+    "id": 7,
+    "name": "São Paulo Auto Import",
+    "country": "Südamerika",
+    "city": "São Paulo",
+    "contact": "+55 11 99888 7777",
+    "rating": 4.1,
+    "description": "Importiert Teile aus USA und Japan für den südamerikanischen Markt."
+  },
+  {
+    "id": 8,
+    "name": "Africa Auto Hub",
+    "country": "Afrika",
+    "city": "Nairobi",
+    "contact": "+254 712 345 678",
+    "rating": 4.7,
+    "description": "Pan‑afrikanischer Händler für Motoren, Getriebe und Elektrik."
+  }
+]
