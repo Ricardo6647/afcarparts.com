@@ -17,7 +17,6 @@ const PORT = process.env.PORT || 5000;
 const HOST = '0.0.0.0';
 
 /* ---------- CORS ---------- */
-// Erlaubt deine Domain mit und ohne "www" + lokale Tests
 const allowedOrigins = [
   'https://afcarparts.com',
   'https://www.afcarparts.com',
@@ -28,7 +27,6 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function (origin, cb) {
-    // Erlaube Requests ohne Origin (z.B. curl, Postman, Health-Checks)
     if (!origin) return cb(null, true);
     if (allowedOrigins.indexOf(origin) !== -1) return cb(null, true);
     return cb(new Error('CORS blocked: ' + origin));
@@ -42,13 +40,26 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-/* ---------- UPLOADS (für CSV / Bilder) ---------- */
+/* ---------- UPLOADS ---------- */
 const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 app.use('/uploads', express.static(uploadsDir));
 const upload = multer({ dest: uploadsDir });
+
+/* ---------- ADMIN MIDDLEWARE ---------- */
+function requireAdmin(req, res, next) {
+  const tokenHeader = (req.headers.authorization || "").trim();
+  if (!tokenHeader || !tokenHeader.startsWith("token-")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  const userId = tokenHeader.replace("token-", "").trim();
+  const users = load("users") || [];
+  const user = users.find(u => String(u.id) === String(userId));
+  if (!user) return res.status(401).json({ error: "Invalid token" });
+  if (user.role !== "admin") return res.status(403).json({ error: "Admin only" });
+  req.user = user;
+  next();
+}
 
 /* ---------- ROOT + HEALTH ---------- */
 app.get('/', (req, res) => {
@@ -70,27 +81,19 @@ app.post('/api/auth/register', (req, res) => {
   if (!email || !password) {
     return res.status(400).json({ error: 'Missing email or password' });
   }
-
   const users = load('users');
   if (users.find(u => u.email === email)) {
     return res.status(400).json({ error: 'User already exists' });
   }
-
   const user = {
     id: Date.now().toString(),
-    name,
-    email,
-    password, // Demo only - in Produktion: bcrypt!
+    name, email, password,
     role: role || 'buyer',
-    phone,
-    country,
+    phone, country,
     created_at: new Date().toISOString()
   };
-
   users.push(user);
   save('users', users);
-
-  // Passwort nicht zurückgeben
   const { password: _, ...safeUser } = user;
   return res.json({ user: safeUser, token: 'token-' + user.id });
 });
@@ -100,34 +103,21 @@ app.post('/api/auth/login', (req, res) => {
   if (!email || !password) {
     return res.status(400).json({ error: 'Missing email or password' });
   }
-
   const users = load('users');
   const user = users.find(u => u.email === email && u.password === password);
-
-  if (!user) {
-    return res.status(400).json({ error: 'Invalid credentials' });
-  }
-
+  if (!user) return res.status(400).json({ error: 'Invalid credentials' });
   const { password: _, ...safeUser } = user;
   return res.json({ user: safeUser, token: 'token-' + user.id });
 });
 
-/* ---------- CATEGORIES ---------- */
+/* ---------- PUBLIC: CATEGORIES ---------- */
 app.get('/api/categories', (req, res) => {
   res.json(load('categories'));
 });
 
-app.get('/api/admin/categories', (req, res) => {
-  res.json(load('categories'));
-});
-
-/* ---------- PRODUCTS LIST ---------- */
+/* ---------- PUBLIC: PRODUCTS ---------- */
 app.get('/api/products', (req, res) => {
-  const {
-    q, category_id, condition, brand, china_only,
-    page = 1, limit = 24
-  } = req.query;
-
+  const { q, category_id, condition, brand, china_only, page = 1, limit = 24 } = req.query;
   let products = load('products');
 
   if (q) {
@@ -139,13 +129,8 @@ app.get('/api/products', (req, res) => {
       (p.oem || '').toLowerCase().includes(s)
     );
   }
-
-  if (category_id) {
-    products = products.filter(p => String(p.category_id) === String(category_id));
-  }
-  if (condition) {
-    products = products.filter(p => p.condition === condition);
-  }
+  if (category_id) products = products.filter(p => String(p.category_id) === String(category_id));
+  if (condition) products = products.filter(p => p.condition === condition);
   if (brand) {
     const b = brand.toLowerCase();
     products = products.filter(p => (p.brand || '').toLowerCase().includes(b));
@@ -160,13 +145,9 @@ app.get('/api/products', (req, res) => {
   const start = (pg - 1) * lim;
   const data = products.slice(start, start + lim);
 
-  res.json({
-    data,
-    pagination: { total, pages: Math.max(1, Math.ceil(total / lim)), page: pg }
-  });
+  res.json({ data, pagination: { total, pages: Math.max(1, Math.ceil(total / lim)), page: pg } });
 });
 
-/* ---------- PRODUCT DETAIL ---------- */
 app.get('/api/products/:id', (req, res) => {
   const products = load('products');
   const p = products.find(x => String(x.id) === String(req.params.id));
@@ -174,7 +155,13 @@ app.get('/api/products/:id', (req, res) => {
   res.json(p);
 });
 
-/* ---------- SHOPS ---------- */
+/* ---------- PUBLIC: BANNERS (für Hauptseite anzeigbar) ---------- */
+app.get('/api/banners', (req, res) => {
+  const banners = load('banners') || [];
+  res.json({ data: banners.filter(b => b.active !== false) });
+});
+
+/* ---------- PUBLIC: SHOPS ---------- */
 app.get('/api/shops', (req, res) => {
   res.json({ data: load('shops') });
 });
@@ -183,7 +170,6 @@ app.get('/api/shops/:id', (req, res) => {
   const shops = load('shops');
   const s = shops.find(x => String(x.id) === String(req.params.id));
   if (!s) return res.status(404).json({ error: 'Shop not found' });
-
   const products = load('products').filter(p => String(p.shop_id) === String(s.id));
   res.json({ shop: s, products });
 });
@@ -198,7 +184,6 @@ app.post('/api/orders', (req, res) => {
   if (!items || !Array.isArray(items) || !items.length) {
     return res.status(400).json({ error: 'No items' });
   }
-
   const orders = load('orders');
   const order = {
     id: Date.now().toString(),
@@ -206,10 +191,8 @@ app.post('/api/orders', (req, res) => {
     status: 'pending',
     created_at: new Date().toISOString()
   };
-
   orders.push(order);
   save('orders', orders);
-
   res.json({ success: true, order });
 });
 
@@ -219,45 +202,146 @@ app.post('/api/seller/products', (req, res) => {
   if (!p.title || !p.price_usd) {
     return res.status(400).json({ error: 'Missing title or price' });
   }
-
   const products = load('products');
   p.id = Date.now().toString();
   p.created_at = new Date().toISOString();
   products.push(p);
   save('products', products);
-
   res.json({ success: true, product: p });
 });
 
-/* ---------- CSV IMPORT ---------- */
 app.post('/api/seller/csv-import', upload.single('file'), (req, res) => {
   res.json({ success: true, message: 'CSV received (parsing not implemented in demo).' });
 });
 
-/* ---------- ADMIN (einfacher Stub - kein externes Modul nötig) ---------- */
-// Falls du später einen echten Admin-Bereich willst, hier ergänzen.
-app.get('/api/admin/users', (req, res) => res.json({ data: load('users') }));
-app.get('/api/admin/products', (req, res) => res.json({ data: load('products') }));
-app.get('/api/admin/orders', (req, res) => res.json({ data: load('orders') }));
-app.get('/api/admin/shops', (req, res) => res.json({ data: load('shops') }));
+/* ============================================================
+   ADMIN ROUTES (alle durch requireAdmin geschützt)
+   ============================================================ */
 
-/* ---------- 404 für alle anderen API Routen ---------- */
+/* ---------- USERS ---------- */
+app.get('/api/admin/users', requireAdmin, (req, res) => {
+  // Passwörter nicht zurückgeben
+  const users = (load('users') || []).map(u => {
+    const { password, ...safe } = u;
+    return safe;
+  });
+  res.json({ data: users });
+});
+
+/* ---------- PRODUCTS ---------- */
+app.get('/api/admin/products', requireAdmin, (req, res) => {
+  res.json({ data: load('products') });
+});
+
+app.post('/api/admin/products', requireAdmin, (req, res) => {
+  const p = req.body || {};
+  if (!p.title || !p.price_usd) {
+    return res.status(400).json({ error: 'Missing title or price' });
+  }
+  const products = load('products');
+  const product = {
+    id: Date.now().toString(),
+    title: p.title,
+    price_usd: p.price_usd,
+    brand: p.brand || '',
+    model: p.model || '',
+    oem: p.oem || '',
+    category_id: p.category_id || null,
+    seller_id: p.seller_id || null,
+    shop_id: p.shop_id || null,
+    condition: p.condition || 'new',
+    images: p.images || [],
+    created_at: new Date().toISOString()
+  };
+  products.push(product);
+  save('products', products);
+  res.json({ success: true, product });
+});
+
+app.delete('/api/admin/products/:id', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  let products = load('products');
+  const before = products.length;
+  products = products.filter(p => String(p.id) !== String(id));
+  save('products', products);
+  res.json({ success: true, deleted: before - products.length });
+});
+
+/* ---------- CATEGORIES ---------- */
+app.get('/api/admin/categories', requireAdmin, (req, res) => {
+  res.json(load('categories'));
+});
+
+app.post('/api/admin/categories', requireAdmin, (req, res) => {
+  const { name } = req.body || {};
+  if (!name) return res.status(400).json({ error: 'Missing name' });
+  const categories = load('categories');
+  const cat = { id: Date.now().toString(), name };
+  categories.push(cat);
+  save('categories', categories);
+  res.json({ success: true, category: cat });
+});
+
+app.delete('/api/admin/categories/:id', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  let categories = load('categories');
+  const before = categories.length;
+  categories = categories.filter(c => String(c.id) !== String(id));
+  save('categories', categories);
+  res.json({ success: true, deleted: before - categories.length });
+});
+
+/* ---------- BANNERS ---------- */
+app.get('/api/admin/banners', requireAdmin, (req, res) => {
+  res.json({ data: load('banners') || [] });
+});
+
+app.post('/api/admin/banners', requireAdmin, (req, res) => {
+  const { image_url, link_url } = req.body || {};
+  if (!image_url) return res.status(400).json({ error: 'Missing image_url' });
+  const banners = load('banners') || [];
+  const banner = {
+    id: Date.now().toString(),
+    image_url,
+    link_url: link_url || '',
+    active: true,
+    created_at: new Date().toISOString()
+  };
+  banners.push(banner);
+  save('banners', banners);
+  res.json({ success: true, banner });
+});
+
+app.delete('/api/admin/banners/:id', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  let banners = load('banners') || [];
+  const before = banners.length;
+  banners = banners.filter(b => String(b.id) !== String(id));
+  save('banners', banners);
+  res.json({ success: true, deleted: before - banners.length });
+});
+
+/* ---------- ORDERS / SHOPS ---------- */
+app.get('/api/admin/orders', requireAdmin, (req, res) => res.json({ data: load('orders') }));
+app.get('/api/admin/shops', requireAdmin, (req, res) => res.json({ data: load('shops') }));
+
+/* ============================================================
+   ERROR HANDLING
+   ============================================================ */
 app.use('/api/*', (req, res) => {
   res.status(404).json({ error: 'API endpoint not found', path: req.originalUrl });
 });
 
-/* ---------- 404 Fallback (KEIN SPA-Fallback - Frontend liegt auf Hostinger) ---------- */
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
-/* ---------- ERROR HANDLER ---------- */
 app.use((err, req, res, next) => {
   console.error('Error:', err.message);
   res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
 });
 
-/* ---------- START SERVER ---------- */
+/* ---------- START ---------- */
 app.listen(PORT, HOST, () => {
   console.log(`AFRICARPARTS API running on port ${PORT}`);
 });
