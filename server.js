@@ -10,6 +10,7 @@ const multer = require('multer');
 const fs = require('fs');
 
 const { load, save } = require('./store');
+const { query } = require('./db');
 
 const app = express();
 
@@ -91,6 +92,24 @@ app.get('/api', (req, res) => {
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+/* ---------- DB TEST ----------
+   Prueft ob Postgres erreichbar ist.
+   Aufruf im Browser: https://afcarparts.com/api/db-test
+*/
+app.get('/api/db-test', async (req, res) => {
+  try {
+    const result = await query('SELECT NOW() as time, version() as version');
+    res.json({
+      ok: true,
+      time: result.rows[0].time,
+      version: result.rows[0].version
+    });
+  } catch (err) {
+    console.error('DB test error:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 /* ---------- AUTH ---------- */
