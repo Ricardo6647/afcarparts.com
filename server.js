@@ -1,6 +1,6 @@
 // file: server.js
 // AFRICARPARTS - Backend API + Frontend
-// Status: categories (multilang) und tags laufen auf Postgres
+// Status: categories + shops laufen auf Postgres (mehrsprachig)
 
 const express = require('express');
 const cors = require('cors');
@@ -74,10 +74,7 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-/* ---------- LANG HELPER ----------
-   Holt die Sprache aus ?lang= oder Accept-Language Header.
-   Faellt zurueck auf 'en' wenn nichts passt.
-*/
+/* ---------- LANG HELPER ---------- */
 const SUPPORTED_LANGS = ['en', 'de', 'fr', 'pt', 'ar'];
 function getLang(req) {
   const fromQuery = (req.query.lang || '').toLowerCase().trim();
@@ -88,6 +85,16 @@ function getLang(req) {
     if (acceptLang.includes(l)) return l;
   }
   return 'en';
+}
+
+/* ---------- SLUG HELPER ---------- */
+function makeSlug(text) {
+  return String(text || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .substring(0, 80);
 }
 
 /* ---------- API STATUS + HEALTH ---------- */
@@ -220,11 +227,6 @@ app.post('/api/auth/login', (req, res) => {
    CATEGORIES (mehrsprachig auf Postgres)
    ============================================================ */
 
-/**
- * Public: alle aktiven Kategorien in der gewuenschten Sprache.
- * Aufruf: GET /api/categories?lang=de
- * Faellt zurueck auf englischen Namen wenn Uebersetzung fehlt.
- */
 app.get('/api/categories', async (req, res) => {
   try {
     const lang = getLang(req);
@@ -251,15 +253,11 @@ app.get('/api/categories', async (req, res) => {
   }
 });
 
-/**
- * Admin: alle Kategorien inkl. ALLER Uebersetzungen (zum Bearbeiten).
- */
 app.get('/api/admin/categories', requireAdmin, async (req, res) => {
   try {
     const cats = await query(`SELECT * FROM categories ORDER BY sort_order ASC, slug ASC`);
     const trans = await query(`SELECT category_id, lang, name FROM category_translations`);
 
-    // Translations gruppieren pro Kategorie
     const transByCat = {};
     for (const t of trans.rows) {
       if (!transByCat[t.category_id]) transByCat[t.category_id] = {};
@@ -278,10 +276,6 @@ app.get('/api/admin/categories', requireAdmin, async (req, res) => {
   }
 });
 
-/**
- * Admin: neue Kategorie anlegen mit Uebersetzungen.
- * Body: { slug, icon_url?, sort_order?, translations: { en: "Brakes", de: "Bremsen", ... } }
- */
 app.post('/api/admin/categories', requireAdmin, async (req, res) => {
   const { slug, icon_url, sort_order, translations } = req.body || {};
 
@@ -295,17 +289,14 @@ app.post('/api/admin/categories', requireAdmin, async (req, res) => {
     return res.status(400).json({ error: 'English (en) translation is required' });
   }
 
-  const cleanSlug = slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
-
   try {
     const newCat = await db.insert('categories', {
-      slug: cleanSlug,
+      slug: makeSlug(slug),
       icon_url: icon_url || null,
       sort_order: parseInt(sort_order, 10) || 0,
       active: true
     });
 
-    // Uebersetzungen einfuegen
     for (const lang of SUPPORTED_LANGS) {
       const name = translations[lang];
       if (name && name.trim()) {
@@ -327,16 +318,13 @@ app.post('/api/admin/categories', requireAdmin, async (req, res) => {
   }
 });
 
-/**
- * Admin: Kategorie aktualisieren (slug, icon, sort_order, active, translations).
- */
 app.put('/api/admin/categories/:id', requireAdmin, async (req, res) => {
   const id = req.params.id;
   const { slug, icon_url, sort_order, active, translations } = req.body || {};
 
   try {
     const updates = {};
-    if (slug !== undefined) updates.slug = slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
+    if (slug !== undefined) updates.slug = makeSlug(slug);
     if (icon_url !== undefined) updates.icon_url = icon_url || null;
     if (sort_order !== undefined) updates.sort_order = parseInt(sort_order, 10) || 0;
     if (active !== undefined) updates.active = !!active;
@@ -351,13 +339,11 @@ app.put('/api/admin/categories/:id', requireAdmin, async (req, res) => {
         if (name === undefined) continue;
 
         if (name === null || name === '') {
-          // Loeschen
           await query(
             'DELETE FROM category_translations WHERE category_id = $1 AND lang = $2',
             [id, lang]
           );
         } else {
-          // Upsert
           await query(`
             INSERT INTO category_translations (category_id, lang, name)
             VALUES ($1, $2, $3)
@@ -375,9 +361,6 @@ app.put('/api/admin/categories/:id', requireAdmin, async (req, res) => {
   }
 });
 
-/**
- * Admin: Kategorie loeschen (cascade loescht auch translations).
- */
 app.delete('/api/admin/categories/:id', requireAdmin, async (req, res) => {
   try {
     const ok = await db.remove('categories', req.params.id);
@@ -392,10 +375,6 @@ app.delete('/api/admin/categories/:id', requireAdmin, async (req, res) => {
    TAGS
    ============================================================ */
 
-/**
- * Public: alle Tags (z.B. fuer Autocomplete).
- * Sortiert nach Beliebtheit (usage_count DESC).
- */
 app.get('/api/tags', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit, 10) || 100;
@@ -410,10 +389,6 @@ app.get('/api/tags', async (req, res) => {
   }
 });
 
-/**
- * Public: Tag-Suche (fuer Autocomplete).
- * Aufruf: GET /api/tags/search?q=brem
- */
 app.get('/api/tags/search', async (req, res) => {
   try {
     const q = (req.query.q || '').toLowerCase().trim();
@@ -429,6 +404,259 @@ app.get('/api/tags/search', async (req, res) => {
     res.json({ data: result.rows });
   } catch (err) {
     console.error('GET /api/tags/search error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ============================================================
+   SHOPS (mehrsprachig auf Postgres)
+   ============================================================ */
+
+/**
+ * Public: alle aktiven Shops in der gewuenschten Sprache.
+ * Aufruf: GET /api/shops?lang=de&country=DE&china_only=1
+ */
+app.get('/api/shops', async (req, res) => {
+  try {
+    const lang = getLang(req);
+    const { country, china_only, page = 1, limit = 24 } = req.query;
+
+    const conditions = ['s.active = TRUE'];
+    const params = [lang];
+    let paramIdx = 2;
+
+    if (country) {
+      conditions.push(`s.country = $${paramIdx}`);
+      params.push(country.toUpperCase());
+      paramIdx++;
+    }
+    if (china_only === '1') {
+      conditions.push(`s.is_china = TRUE`);
+    }
+
+    const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+
+    // Total count
+    const countRes = await query(
+      `SELECT COUNT(*) AS c FROM shops s ${where}`,
+      params.slice(1)
+    );
+    const total = parseInt(countRes.rows[0].c, 10);
+
+    // Pagination
+    const pg = Math.max(1, parseInt(page, 10) || 1);
+    const lim = Math.min(100, Math.max(1, parseInt(limit, 10) || 24));
+    const offset = (pg - 1) * lim;
+
+    params.push(lim, offset);
+
+    const result = await query(`
+      SELECT
+        s.id, s.slug, s.name, s.country, s.city, s.email, s.phone,
+        s.is_china, s.logo_url, s.created_at,
+        COALESCE(t.description, t_en.description, '') AS description
+      FROM shops s
+      LEFT JOIN shop_translations t
+        ON t.shop_id = s.id AND t.lang = $1
+      LEFT JOIN shop_translations t_en
+        ON t_en.shop_id = s.id AND t_en.lang = 'en'
+      ${where}
+      ORDER BY s.created_at DESC
+      LIMIT $${paramIdx} OFFSET $${paramIdx + 1}
+    `, params);
+
+    res.json({
+      data: result.rows,
+      pagination: { total, pages: Math.max(1, Math.ceil(total / lim)), page: pg, limit: lim }
+    });
+  } catch (err) {
+    console.error('GET /api/shops error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Public: einzelnen Shop holen mit allen Produkten.
+ * Aufruf: GET /api/shops/:id?lang=de
+ * :id kann sowohl die numerische ID als auch der slug sein.
+ */
+app.get('/api/shops/:id', async (req, res) => {
+  try {
+    const lang = getLang(req);
+    const idOrSlug = req.params.id;
+    const isNumeric = /^\d+$/.test(idOrSlug);
+
+    const shopRes = await query(`
+      SELECT
+        s.*,
+        COALESCE(t.description, t_en.description, '') AS description
+      FROM shops s
+      LEFT JOIN shop_translations t
+        ON t.shop_id = s.id AND t.lang = $1
+      LEFT JOIN shop_translations t_en
+        ON t_en.shop_id = s.id AND t_en.lang = 'en'
+      WHERE ${isNumeric ? 's.id = $2' : 's.slug = $2'}
+      LIMIT 1
+    `, [lang, isNumeric ? parseInt(idOrSlug, 10) : idOrSlug]);
+
+    if (shopRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+
+    const shop = shopRes.rows[0];
+
+    // Produkte (noch JSON, kommt in Etappe 3.3 auf Postgres)
+    const products = load('products').filter(p => String(p.shop_id) === String(shop.id));
+
+    res.json({ shop, products });
+  } catch (err) {
+    console.error('GET /api/shops/:id error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Admin: alle Shops inkl. ALLER Uebersetzungen.
+ */
+app.get('/api/admin/shops', requireAdmin, async (req, res) => {
+  try {
+    const shops = await query(`SELECT * FROM shops ORDER BY created_at DESC`);
+    const trans = await query(`SELECT shop_id, lang, description FROM shop_translations`);
+
+    const transByShop = {};
+    for (const t of trans.rows) {
+      if (!transByShop[t.shop_id]) transByShop[t.shop_id] = {};
+      transByShop[t.shop_id][t.lang] = t.description;
+    }
+
+    const data = shops.rows.map(s => ({
+      ...s,
+      translations: transByShop[s.id] || {}
+    }));
+
+    res.json({ data });
+  } catch (err) {
+    console.error('GET /api/admin/shops error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Admin: neuen Shop anlegen.
+ */
+app.post('/api/admin/shops', requireAdmin, async (req, res) => {
+  const {
+    name, slug, owner_id, country, city, email, phone,
+    is_china, logo_url, translations
+  } = req.body || {};
+
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'Missing shop name' });
+  }
+
+  try {
+    const finalSlug = slug ? makeSlug(slug) : makeSlug(name);
+
+    const newShop = await db.insert('shops', {
+      owner_id: owner_id ? parseInt(owner_id, 10) : null,
+      slug: finalSlug,
+      name: name.trim(),
+      country: country ? country.toUpperCase() : null,
+      city: city ? city.trim() : null,
+      email: email ? email.trim() : null,
+      phone: phone ? phone.trim() : null,
+      is_china: !!is_china,
+      logo_url: logo_url || null,
+      active: true
+    });
+
+    if (translations && typeof translations === 'object') {
+      for (const lang of SUPPORTED_LANGS) {
+        const desc = translations[lang];
+        if (desc && desc.trim()) {
+          await db.insert('shop_translations', {
+            shop_id: newShop.id,
+            lang,
+            description: desc.trim()
+          });
+        }
+      }
+    }
+
+    res.json({ success: true, shop: newShop });
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(400).json({ error: 'Slug already exists' });
+    }
+    console.error('POST /api/admin/shops error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Admin: Shop aktualisieren.
+ */
+app.put('/api/admin/shops/:id', requireAdmin, async (req, res) => {
+  const id = req.params.id;
+  const {
+    name, slug, owner_id, country, city, email, phone,
+    is_china, logo_url, active, translations
+  } = req.body || {};
+
+  try {
+    const updates = {};
+    if (name !== undefined) updates.name = name.trim();
+    if (slug !== undefined) updates.slug = makeSlug(slug);
+    if (owner_id !== undefined) updates.owner_id = owner_id ? parseInt(owner_id, 10) : null;
+    if (country !== undefined) updates.country = country ? country.toUpperCase() : null;
+    if (city !== undefined) updates.city = city ? city.trim() : null;
+    if (email !== undefined) updates.email = email ? email.trim() : null;
+    if (phone !== undefined) updates.phone = phone ? phone.trim() : null;
+    if (is_china !== undefined) updates.is_china = !!is_china;
+    if (logo_url !== undefined) updates.logo_url = logo_url || null;
+    if (active !== undefined) updates.active = !!active;
+
+    if (Object.keys(updates).length > 0) {
+      await db.update('shops', id, updates);
+    }
+
+    if (translations && typeof translations === 'object') {
+      for (const lang of SUPPORTED_LANGS) {
+        const desc = translations[lang];
+        if (desc === undefined) continue;
+
+        if (desc === null || desc === '') {
+          await query(
+            'DELETE FROM shop_translations WHERE shop_id = $1 AND lang = $2',
+            [id, lang]
+          );
+        } else {
+          await query(`
+            INSERT INTO shop_translations (shop_id, lang, description)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (shop_id, lang)
+            DO UPDATE SET description = EXCLUDED.description
+          `, [id, lang, desc.trim()]);
+        }
+      }
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('PUT /api/admin/shops error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Admin: Shop loeschen (cascade loescht auch translations).
+ */
+app.delete('/api/admin/shops/:id', requireAdmin, async (req, res) => {
+  try {
+    const ok = await db.remove('shops', req.params.id);
+    res.json({ success: true, deleted: ok ? 1 : 0 });
+  } catch (err) {
+    console.error('DELETE /api/admin/shops error:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -477,19 +705,6 @@ app.get('/api/products/:id', (req, res) => {
 app.get('/api/banners', (req, res) => {
   const banners = load('banners') || [];
   res.json({ data: banners.filter(b => b.active !== false) });
-});
-
-/* ---------- PUBLIC: SHOPS (noch JSON) ---------- */
-app.get('/api/shops', (req, res) => {
-  res.json({ data: load('shops') });
-});
-
-app.get('/api/shops/:id', (req, res) => {
-  const shops = load('shops');
-  const s = shops.find(x => String(x.id) === String(req.params.id));
-  if (!s) return res.status(404).json({ error: 'Shop not found' });
-  const products = load('products').filter(p => String(p.shop_id) === String(s.id));
-  res.json({ shop: s, products });
 });
 
 /* ---------- ORDERS (noch JSON) ---------- */
@@ -612,7 +827,6 @@ app.delete('/api/admin/banners/:id', requireAdmin, (req, res) => {
 });
 
 app.get('/api/admin/orders', requireAdmin, (req, res) => res.json({ data: load('orders') }));
-app.get('/api/admin/shops', requireAdmin, (req, res) => res.json({ data: load('shops') }));
 
 /* ============================================================
    ERROR HANDLING
