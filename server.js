@@ -1,6 +1,6 @@
 // file: server.js
 // AFRICARPARTS - Backend API + Frontend
-// Status: categories laeuft auf Postgres, Rest noch auf JSON
+// Status: categories (multilang) und tags laufen auf Postgres
 
 const express = require('express');
 const cors = require('cors');
@@ -72,6 +72,22 @@ function requireAdmin(req, res, next) {
   if (user.role !== "admin") return res.status(403).json({ error: "Admin only" });
   req.user = user;
   next();
+}
+
+/* ---------- LANG HELPER ----------
+   Holt die Sprache aus ?lang= oder Accept-Language Header.
+   Faellt zurueck auf 'en' wenn nichts passt.
+*/
+const SUPPORTED_LANGS = ['en', 'de', 'fr', 'pt', 'ar'];
+function getLang(req) {
+  const fromQuery = (req.query.lang || '').toLowerCase().trim();
+  if (SUPPORTED_LANGS.includes(fromQuery)) return fromQuery;
+
+  const acceptLang = (req.headers['accept-language'] || '').toLowerCase();
+  for (const l of SUPPORTED_LANGS) {
+    if (acceptLang.includes(l)) return l;
+  }
+  return 'en';
 }
 
 /* ---------- API STATUS + HEALTH ---------- */
@@ -201,52 +217,218 @@ app.post('/api/auth/login', (req, res) => {
 });
 
 /* ============================================================
-   CATEGORIES (auf Postgres umgestellt)
+   CATEGORIES (mehrsprachig auf Postgres)
    ============================================================ */
 
+/**
+ * Public: alle aktiven Kategorien in der gewuenschten Sprache.
+ * Aufruf: GET /api/categories?lang=de
+ * Faellt zurueck auf englischen Namen wenn Uebersetzung fehlt.
+ */
 app.get('/api/categories', async (req, res) => {
   try {
-    const categories = await db.all('categories', 'name ASC');
-    res.json(categories);
+    const lang = getLang(req);
+    const result = await query(`
+      SELECT
+        c.id,
+        c.slug,
+        c.icon_url,
+        c.sort_order,
+        COALESCE(t.name, t_en.name, c.slug) AS name,
+        $1::text AS lang
+      FROM categories c
+      LEFT JOIN category_translations t
+        ON t.category_id = c.id AND t.lang = $1
+      LEFT JOIN category_translations t_en
+        ON t_en.category_id = c.id AND t_en.lang = 'en'
+      WHERE c.active = TRUE
+      ORDER BY c.sort_order ASC, COALESCE(t.name, t_en.name) ASC
+    `, [lang]);
+    res.json(result.rows);
   } catch (err) {
     console.error('GET /api/categories error:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
+/**
+ * Admin: alle Kategorien inkl. ALLER Uebersetzungen (zum Bearbeiten).
+ */
 app.get('/api/admin/categories', requireAdmin, async (req, res) => {
   try {
-    const categories = await db.all('categories', 'name ASC');
-    res.json(categories);
+    const cats = await query(`SELECT * FROM categories ORDER BY sort_order ASC, slug ASC`);
+    const trans = await query(`SELECT category_id, lang, name FROM category_translations`);
+
+    // Translations gruppieren pro Kategorie
+    const transByCat = {};
+    for (const t of trans.rows) {
+      if (!transByCat[t.category_id]) transByCat[t.category_id] = {};
+      transByCat[t.category_id][t.lang] = t.name;
+    }
+
+    const data = cats.rows.map(c => ({
+      ...c,
+      translations: transByCat[c.id] || {}
+    }));
+
+    res.json({ data });
   } catch (err) {
     console.error('GET /api/admin/categories error:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
+/**
+ * Admin: neue Kategorie anlegen mit Uebersetzungen.
+ * Body: { slug, icon_url?, sort_order?, translations: { en: "Brakes", de: "Bremsen", ... } }
+ */
 app.post('/api/admin/categories', requireAdmin, async (req, res) => {
+  const { slug, icon_url, sort_order, translations } = req.body || {};
+
+  if (!slug || !slug.trim()) {
+    return res.status(400).json({ error: 'Missing slug' });
+  }
+  if (!translations || typeof translations !== 'object') {
+    return res.status(400).json({ error: 'Missing translations object' });
+  }
+  if (!translations.en || !translations.en.trim()) {
+    return res.status(400).json({ error: 'English (en) translation is required' });
+  }
+
+  const cleanSlug = slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
+
   try {
-    const { name } = req.body || {};
-    if (!name || !name.trim()) {
-      return res.status(400).json({ error: 'Missing name' });
+    const newCat = await db.insert('categories', {
+      slug: cleanSlug,
+      icon_url: icon_url || null,
+      sort_order: parseInt(sort_order, 10) || 0,
+      active: true
+    });
+
+    // Uebersetzungen einfuegen
+    for (const lang of SUPPORTED_LANGS) {
+      const name = translations[lang];
+      if (name && name.trim()) {
+        await db.insert('category_translations', {
+          category_id: newCat.id,
+          lang,
+          name: name.trim()
+        });
+      }
     }
-    const cat = await db.insert('categories', { name: name.trim() });
-    res.json({ success: true, category: cat });
+
+    res.json({ success: true, category: newCat });
   } catch (err) {
     if (err.code === '23505') {
-      return res.status(400).json({ error: 'Category name already exists' });
+      return res.status(400).json({ error: 'Slug already exists' });
     }
     console.error('POST /api/admin/categories error:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
+/**
+ * Admin: Kategorie aktualisieren (slug, icon, sort_order, active, translations).
+ */
+app.put('/api/admin/categories/:id', requireAdmin, async (req, res) => {
+  const id = req.params.id;
+  const { slug, icon_url, sort_order, active, translations } = req.body || {};
+
+  try {
+    const updates = {};
+    if (slug !== undefined) updates.slug = slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
+    if (icon_url !== undefined) updates.icon_url = icon_url || null;
+    if (sort_order !== undefined) updates.sort_order = parseInt(sort_order, 10) || 0;
+    if (active !== undefined) updates.active = !!active;
+
+    if (Object.keys(updates).length > 0) {
+      await db.update('categories', id, updates);
+    }
+
+    if (translations && typeof translations === 'object') {
+      for (const lang of SUPPORTED_LANGS) {
+        const name = translations[lang];
+        if (name === undefined) continue;
+
+        if (name === null || name === '') {
+          // Loeschen
+          await query(
+            'DELETE FROM category_translations WHERE category_id = $1 AND lang = $2',
+            [id, lang]
+          );
+        } else {
+          // Upsert
+          await query(`
+            INSERT INTO category_translations (category_id, lang, name)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (category_id, lang)
+            DO UPDATE SET name = EXCLUDED.name
+          `, [id, lang, name.trim()]);
+        }
+      }
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('PUT /api/admin/categories error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Admin: Kategorie loeschen (cascade loescht auch translations).
+ */
 app.delete('/api/admin/categories/:id', requireAdmin, async (req, res) => {
   try {
     const ok = await db.remove('categories', req.params.id);
     res.json({ success: true, deleted: ok ? 1 : 0 });
   } catch (err) {
     console.error('DELETE /api/admin/categories error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ============================================================
+   TAGS
+   ============================================================ */
+
+/**
+ * Public: alle Tags (z.B. fuer Autocomplete).
+ * Sortiert nach Beliebtheit (usage_count DESC).
+ */
+app.get('/api/tags', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 100;
+    const result = await query(
+      'SELECT id, slug, usage_count FROM tags ORDER BY usage_count DESC, slug ASC LIMIT $1',
+      [Math.min(limit, 500)]
+    );
+    res.json({ data: result.rows });
+  } catch (err) {
+    console.error('GET /api/tags error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Public: Tag-Suche (fuer Autocomplete).
+ * Aufruf: GET /api/tags/search?q=brem
+ */
+app.get('/api/tags/search', async (req, res) => {
+  try {
+    const q = (req.query.q || '').toLowerCase().trim();
+    if (!q) return res.json({ data: [] });
+
+    const result = await query(
+      `SELECT id, slug, usage_count FROM tags
+       WHERE slug ILIKE $1
+       ORDER BY usage_count DESC, slug ASC
+       LIMIT 20`,
+      [q + '%']
+    );
+    res.json({ data: result.rows });
+  } catch (err) {
+    console.error('GET /api/tags/search error:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -351,7 +533,7 @@ app.post('/api/seller/csv-import', upload.single('file'), (req, res) => {
 });
 
 /* ============================================================
-   ADMIN ROUTES (groesstenteils noch JSON)
+   ADMIN ROUTES (Rest noch JSON)
    ============================================================ */
 
 app.get('/api/admin/users', requireAdmin, (req, res) => {
