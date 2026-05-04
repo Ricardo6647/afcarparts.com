@@ -1,7 +1,6 @@
 // file: server.js
-// AFRICARPARTS - Backend API + Frontend (alles auf Render)
-// Vorher: Frontend lag separat auf Hostinger
-// Jetzt:  Render serviert auch index.html, app.js, styles.css
+// AFRICARPARTS - Backend API + Frontend
+// Status: categories laeuft auf Postgres, Rest noch auf JSON
 
 const express = require('express');
 const cors = require('cors');
@@ -11,10 +10,11 @@ const fs = require('fs');
 
 const { load, save } = require('./store');
 const { query } = require('./db');
+const db = require('./storeDb');
 
 const app = express();
 
-/* ---------- PORT + HOST (Render setzt PORT automatisch) ---------- */
+/* ---------- PORT + HOST ---------- */
 const PORT = process.env.PORT || 5000;
 const HOST = '0.0.0.0';
 
@@ -76,11 +76,7 @@ function requireAdmin(req, res, next) {
 
 /* ---------- API STATUS + HEALTH ---------- */
 app.get('/api', (req, res) => {
-  res.json({
-    name: 'AFRICARPARTS API',
-    status: 'running',
-    docs: '/health'
-  });
+  res.json({ name: 'AFRICARPARTS API', status: 'running', docs: '/health' });
 });
 
 app.get('/health', (req, res) => {
@@ -91,21 +87,14 @@ app.get('/health', (req, res) => {
 app.get('/api/db-test', async (req, res) => {
   try {
     const result = await query('SELECT NOW() as time, version() as version');
-    res.json({
-      ok: true,
-      time: result.rows[0].time,
-      version: result.rows[0].version
-    });
+    res.json({ ok: true, time: result.rows[0].time, version: result.rows[0].version });
   } catch (err) {
     console.error('DB test error:', err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-/* ---------- DB MIGRATIONS ----------
-   Fuehrt eine SQL-Migration aus dem Ordner ./migrations aus.
-   Geschuetzt durch die Env-Variable MIGRATION_SECRET.
-*/
+/* ---------- DB MIGRATIONS ---------- */
 app.post('/api/admin/run-migration', async (req, res) => {
   const provided = req.headers['x-migration-secret'];
   if (!process.env.MIGRATION_SECRET) {
@@ -129,21 +118,14 @@ app.post('/api/admin/run-migration', async (req, res) => {
   try {
     const sql = fs.readFileSync(migrationPath, 'utf8');
     await query(sql);
-    res.json({
-      ok: true,
-      file: filename,
-      message: 'Migration completed successfully'
-    });
+    res.json({ ok: true, file: filename, message: 'Migration completed successfully' });
   } catch (err) {
     console.error('Migration error:', err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-/* ---------- DB INFO ----------
-   Listet alle Tabellen mit Spalten- und Zeilenanzahl.
-   Aufruf: GET /api/admin/db-info?secret=DEIN_SECRET
-*/
+/* ---------- DB INFO ---------- */
 app.get('/api/admin/db-info', async (req, res) => {
   if (!process.env.MIGRATION_SECRET) {
     return res.status(503).json({ error: 'MIGRATION_SECRET not set on server' });
@@ -172,11 +154,7 @@ app.get('/api/admin/db-info', async (req, res) => {
             rows: parseInt(c.rows[0].c, 10)
           };
         } catch {
-          return {
-            table_name: t.table_name,
-            columns: parseInt(t.column_count, 10),
-            rows: null
-          };
+          return { table_name: t.table_name, columns: parseInt(t.column_count, 10), rows: null };
         }
       })
     );
@@ -187,7 +165,7 @@ app.get('/api/admin/db-info', async (req, res) => {
   }
 });
 
-/* ---------- AUTH ---------- */
+/* ---------- AUTH (noch JSON) ---------- */
 app.post('/api/auth/register', (req, res) => {
   const { name, email, password, role, phone, country } = req.body || {};
   if (!email || !password) {
@@ -222,12 +200,58 @@ app.post('/api/auth/login', (req, res) => {
   return res.json({ user: safeUser, token: 'token-' + user.id });
 });
 
-/* ---------- PUBLIC: CATEGORIES ---------- */
-app.get('/api/categories', (req, res) => {
-  res.json(load('categories'));
+/* ============================================================
+   CATEGORIES (auf Postgres umgestellt)
+   ============================================================ */
+
+app.get('/api/categories', async (req, res) => {
+  try {
+    const categories = await db.all('categories', 'name ASC');
+    res.json(categories);
+  } catch (err) {
+    console.error('GET /api/categories error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
-/* ---------- PUBLIC: PRODUCTS ---------- */
+app.get('/api/admin/categories', requireAdmin, async (req, res) => {
+  try {
+    const categories = await db.all('categories', 'name ASC');
+    res.json(categories);
+  } catch (err) {
+    console.error('GET /api/admin/categories error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/categories', requireAdmin, async (req, res) => {
+  try {
+    const { name } = req.body || {};
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Missing name' });
+    }
+    const cat = await db.insert('categories', { name: name.trim() });
+    res.json({ success: true, category: cat });
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(400).json({ error: 'Category name already exists' });
+    }
+    console.error('POST /api/admin/categories error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/admin/categories/:id', requireAdmin, async (req, res) => {
+  try {
+    const ok = await db.remove('categories', req.params.id);
+    res.json({ success: true, deleted: ok ? 1 : 0 });
+  } catch (err) {
+    console.error('DELETE /api/admin/categories error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ---------- PUBLIC: PRODUCTS (noch JSON) ---------- */
 app.get('/api/products', (req, res) => {
   const { q, category_id, condition, brand, china_only, page = 1, limit = 24 } = req.query;
   let products = load('products');
@@ -267,13 +291,13 @@ app.get('/api/products/:id', (req, res) => {
   res.json(p);
 });
 
-/* ---------- PUBLIC: BANNERS ---------- */
+/* ---------- PUBLIC: BANNERS (noch JSON) ---------- */
 app.get('/api/banners', (req, res) => {
   const banners = load('banners') || [];
   res.json({ data: banners.filter(b => b.active !== false) });
 });
 
-/* ---------- PUBLIC: SHOPS ---------- */
+/* ---------- PUBLIC: SHOPS (noch JSON) ---------- */
 app.get('/api/shops', (req, res) => {
   res.json({ data: load('shops') });
 });
@@ -286,7 +310,7 @@ app.get('/api/shops/:id', (req, res) => {
   res.json({ shop: s, products });
 });
 
-/* ---------- ORDERS ---------- */
+/* ---------- ORDERS (noch JSON) ---------- */
 app.get('/api/orders', (req, res) => {
   res.json({ data: load('orders') });
 });
@@ -308,7 +332,7 @@ app.post('/api/orders', (req, res) => {
   res.json({ success: true, order });
 });
 
-/* ---------- SELLER ---------- */
+/* ---------- SELLER (noch JSON) ---------- */
 app.post('/api/seller/products', (req, res) => {
   const p = req.body || {};
   if (!p.title || !p.price_usd) {
@@ -327,7 +351,7 @@ app.post('/api/seller/csv-import', upload.single('file'), (req, res) => {
 });
 
 /* ============================================================
-   ADMIN ROUTES
+   ADMIN ROUTES (groesstenteils noch JSON)
    ============================================================ */
 
 app.get('/api/admin/users', requireAdmin, (req, res) => {
@@ -374,29 +398,6 @@ app.delete('/api/admin/products/:id', requireAdmin, (req, res) => {
   products = products.filter(p => String(p.id) !== String(id));
   save('products', products);
   res.json({ success: true, deleted: before - products.length });
-});
-
-app.get('/api/admin/categories', requireAdmin, (req, res) => {
-  res.json(load('categories'));
-});
-
-app.post('/api/admin/categories', requireAdmin, (req, res) => {
-  const { name } = req.body || {};
-  if (!name) return res.status(400).json({ error: 'Missing name' });
-  const categories = load('categories');
-  const cat = { id: Date.now().toString(), name };
-  categories.push(cat);
-  save('categories', categories);
-  res.json({ success: true, category: cat });
-});
-
-app.delete('/api/admin/categories/:id', requireAdmin, (req, res) => {
-  const { id } = req.params;
-  let categories = load('categories');
-  const before = categories.length;
-  categories = categories.filter(c => String(c.id) !== String(id));
-  save('categories', categories);
-  res.json({ success: true, deleted: before - categories.length });
 });
 
 app.get('/api/admin/banners', requireAdmin, (req, res) => {
