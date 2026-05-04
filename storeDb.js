@@ -1,20 +1,28 @@
 // file: storeDb.js
 // AFRICARPARTS - Postgres Helper-Funktionen
 //
-// Dieses Modul bietet einfache Helfer-Funktionen fuer typische DB-Aufgaben:
+// Bietet einfache Helfer-Funktionen fuer typische DB-Aufgaben:
 // - all(table)            -> alle Zeilen lesen
 // - byId(table, id)       -> eine Zeile per ID
 // - insert(table, data)   -> neue Zeile einfuegen, gibt sie zurueck
 // - update(table, id, d)  -> Zeile per ID aktualisieren
 // - remove(table, id)     -> Zeile per ID loeschen
-//
-// Vorteil: Wir muessen in server.js nicht ueberall SQL-Strings schreiben.
+// - count(table, where)   -> Anzahl Zeilen
 
 const { query } = require('./db');
 
 // Erlaubte Tabellen-Namen (Schutz gegen SQL-Injection bei Tabellen-Namen)
 const ALLOWED_TABLES = new Set([
-  'users', 'categories', 'shops', 'products', 'banners', 'orders'
+  'users',
+  'categories',
+  'category_translations',
+  'shops',
+  'shop_translations',
+  'products',
+  'product_tags',
+  'tags',
+  'banners',
+  'orders'
 ]);
 
 function assertTable(table) {
@@ -25,11 +33,9 @@ function assertTable(table) {
 
 /**
  * Alle Zeilen einer Tabelle lesen.
- * Beispiel: const cats = await all('categories');
  */
 async function all(table, orderBy = 'id ASC') {
   assertTable(table);
-  // orderBy darf nur einfache Whitelist-Werte enthalten
   const safeOrder = /^[a-z_]+\s+(ASC|DESC)$/i.test(orderBy) ? orderBy : 'id ASC';
   const sql = `SELECT * FROM ${table} ORDER BY ${safeOrder}`;
   const res = await query(sql);
@@ -37,8 +43,7 @@ async function all(table, orderBy = 'id ASC') {
 }
 
 /**
- * Eine Zeile per ID lesen, oder null wenn nicht gefunden.
- * Beispiel: const cat = await byId('categories', 5);
+ * Eine Zeile per ID lesen.
  */
 async function byId(table, id) {
   assertTable(table);
@@ -47,8 +52,7 @@ async function byId(table, id) {
 }
 
 /**
- * Neue Zeile einfuegen. Gibt die eingefuegte Zeile (mit id) zurueck.
- * Beispiel: const cat = await insert('categories', { name: 'Bremsen' });
+ * Neue Zeile einfuegen.
  */
 async function insert(table, data) {
   assertTable(table);
@@ -65,8 +69,7 @@ async function insert(table, data) {
 }
 
 /**
- * Zeile per ID aktualisieren. Gibt die aktualisierte Zeile zurueck oder null.
- * Beispiel: const cat = await update('categories', 5, { name: 'Neue Bremsen' });
+ * Zeile per ID aktualisieren.
  */
 async function update(table, id, data) {
   assertTable(table);
@@ -83,8 +86,7 @@ async function update(table, id, data) {
 }
 
 /**
- * Zeile per ID loeschen. Gibt true zurueck wenn was geloescht wurde.
- * Beispiel: const ok = await remove('categories', 5);
+ * Zeile per ID loeschen.
  */
 async function remove(table, id) {
   assertTable(table);
