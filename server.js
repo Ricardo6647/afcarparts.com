@@ -1,6 +1,6 @@
 // file: server.js
 // AFRICARPARTS - Backend API + Frontend
-// Status: categories + shops laufen auf Postgres (mehrsprachig)
+// Status: categories, shops, products laufen auf Postgres (mehrsprachig)
 
 const express = require('express');
 const cors = require('cors');
@@ -95,6 +95,32 @@ function makeSlug(text) {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
     .substring(0, 80);
+}
+
+/* ---------- TAG HELPER ----------
+   Wandelt eine Liste von Tag-Strings in tag_ids um.
+   Erstellt neue Tags falls noetig, gibt ids zurueck.
+*/
+async function resolveTags(tagSlugs) {
+  if (!Array.isArray(tagSlugs) || tagSlugs.length === 0) return [];
+
+  const cleaned = tagSlugs
+    .map(t => makeSlug(t))
+    .filter(t => t.length >= 2 && t.length <= 50);
+
+  if (cleaned.length === 0) return [];
+
+  // Upsert Tags und IDs zurueckholen
+  const ids = [];
+  for (const slug of cleaned) {
+    const res = await query(`
+      INSERT INTO tags (slug) VALUES ($1)
+      ON CONFLICT (slug) DO UPDATE SET slug = EXCLUDED.slug
+      RETURNING id
+    `, [slug]);
+    ids.push(res.rows[0].id);
+  }
+  return ids;
 }
 
 /* ---------- API STATUS + HEALTH ---------- */
@@ -232,17 +258,12 @@ app.get('/api/categories', async (req, res) => {
     const lang = getLang(req);
     const result = await query(`
       SELECT
-        c.id,
-        c.slug,
-        c.icon_url,
-        c.sort_order,
+        c.id, c.slug, c.icon_url, c.sort_order,
         COALESCE(t.name, t_en.name, c.slug) AS name,
         $1::text AS lang
       FROM categories c
-      LEFT JOIN category_translations t
-        ON t.category_id = c.id AND t.lang = $1
-      LEFT JOIN category_translations t_en
-        ON t_en.category_id = c.id AND t_en.lang = 'en'
+      LEFT JOIN category_translations t ON t.category_id = c.id AND t.lang = $1
+      LEFT JOIN category_translations t_en ON t_en.category_id = c.id AND t_en.lang = 'en'
       WHERE c.active = TRUE
       ORDER BY c.sort_order ASC, COALESCE(t.name, t_en.name) ASC
     `, [lang]);
@@ -264,11 +285,7 @@ app.get('/api/admin/categories', requireAdmin, async (req, res) => {
       transByCat[t.category_id][t.lang] = t.name;
     }
 
-    const data = cats.rows.map(c => ({
-      ...c,
-      translations: transByCat[c.id] || {}
-    }));
-
+    const data = cats.rows.map(c => ({ ...c, translations: transByCat[c.id] || {} }));
     res.json({ data });
   } catch (err) {
     console.error('GET /api/admin/categories error:', err);
@@ -279,9 +296,7 @@ app.get('/api/admin/categories', requireAdmin, async (req, res) => {
 app.post('/api/admin/categories', requireAdmin, async (req, res) => {
   const { slug, icon_url, sort_order, translations } = req.body || {};
 
-  if (!slug || !slug.trim()) {
-    return res.status(400).json({ error: 'Missing slug' });
-  }
+  if (!slug || !slug.trim()) return res.status(400).json({ error: 'Missing slug' });
   if (!translations || typeof translations !== 'object') {
     return res.status(400).json({ error: 'Missing translations object' });
   }
@@ -301,18 +316,14 @@ app.post('/api/admin/categories', requireAdmin, async (req, res) => {
       const name = translations[lang];
       if (name && name.trim()) {
         await db.insert('category_translations', {
-          category_id: newCat.id,
-          lang,
-          name: name.trim()
+          category_id: newCat.id, lang, name: name.trim()
         });
       }
     }
 
     res.json({ success: true, category: newCat });
   } catch (err) {
-    if (err.code === '23505') {
-      return res.status(400).json({ error: 'Slug already exists' });
-    }
+    if (err.code === '23505') return res.status(400).json({ error: 'Slug already exists' });
     console.error('POST /api/admin/categories error:', err);
     res.status(500).json({ error: err.message });
   }
@@ -329,9 +340,7 @@ app.put('/api/admin/categories/:id', requireAdmin, async (req, res) => {
     if (sort_order !== undefined) updates.sort_order = parseInt(sort_order, 10) || 0;
     if (active !== undefined) updates.active = !!active;
 
-    if (Object.keys(updates).length > 0) {
-      await db.update('categories', id, updates);
-    }
+    if (Object.keys(updates).length > 0) await db.update('categories', id, updates);
 
     if (translations && typeof translations === 'object') {
       for (const lang of SUPPORTED_LANGS) {
@@ -339,16 +348,12 @@ app.put('/api/admin/categories/:id', requireAdmin, async (req, res) => {
         if (name === undefined) continue;
 
         if (name === null || name === '') {
-          await query(
-            'DELETE FROM category_translations WHERE category_id = $1 AND lang = $2',
-            [id, lang]
-          );
+          await query('DELETE FROM category_translations WHERE category_id = $1 AND lang = $2', [id, lang]);
         } else {
           await query(`
             INSERT INTO category_translations (category_id, lang, name)
             VALUES ($1, $2, $3)
-            ON CONFLICT (category_id, lang)
-            DO UPDATE SET name = EXCLUDED.name
+            ON CONFLICT (category_id, lang) DO UPDATE SET name = EXCLUDED.name
           `, [id, lang, name.trim()]);
         }
       }
@@ -379,7 +384,7 @@ app.get('/api/tags', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit, 10) || 100;
     const result = await query(
-      'SELECT id, slug, usage_count FROM tags ORDER BY usage_count DESC, slug ASC LIMIT $1',
+      'SELECT id, slug, usage_count FROM tags WHERE usage_count > 0 ORDER BY usage_count DESC, slug ASC LIMIT $1',
       [Math.min(limit, 500)]
     );
     res.json({ data: result.rows });
@@ -397,8 +402,7 @@ app.get('/api/tags/search', async (req, res) => {
     const result = await query(
       `SELECT id, slug, usage_count FROM tags
        WHERE slug ILIKE $1
-       ORDER BY usage_count DESC, slug ASC
-       LIMIT 20`,
+       ORDER BY usage_count DESC, slug ASC LIMIT 20`,
       [q + '%']
     );
     res.json({ data: result.rows });
@@ -412,10 +416,6 @@ app.get('/api/tags/search', async (req, res) => {
    SHOPS (mehrsprachig auf Postgres)
    ============================================================ */
 
-/**
- * Public: alle aktiven Shops in der gewuenschten Sprache.
- * Aufruf: GET /api/shops?lang=de&country=DE&china_only=1
- */
 app.get('/api/shops', async (req, res) => {
   try {
     const lang = getLang(req);
@@ -430,20 +430,13 @@ app.get('/api/shops', async (req, res) => {
       params.push(country.toUpperCase());
       paramIdx++;
     }
-    if (china_only === '1') {
-      conditions.push(`s.is_china = TRUE`);
-    }
+    if (china_only === '1') conditions.push(`s.is_china = TRUE`);
 
-    const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+    const where = 'WHERE ' + conditions.join(' AND ');
 
-    // Total count
-    const countRes = await query(
-      `SELECT COUNT(*) AS c FROM shops s ${where}`,
-      params.slice(1)
-    );
+    const countRes = await query(`SELECT COUNT(*) AS c FROM shops s ${where}`, params.slice(1));
     const total = parseInt(countRes.rows[0].c, 10);
 
-    // Pagination
     const pg = Math.max(1, parseInt(page, 10) || 1);
     const lim = Math.min(100, Math.max(1, parseInt(limit, 10) || 24));
     const offset = (pg - 1) * lim;
@@ -456,10 +449,8 @@ app.get('/api/shops', async (req, res) => {
         s.is_china, s.logo_url, s.created_at,
         COALESCE(t.description, t_en.description, '') AS description
       FROM shops s
-      LEFT JOIN shop_translations t
-        ON t.shop_id = s.id AND t.lang = $1
-      LEFT JOIN shop_translations t_en
-        ON t_en.shop_id = s.id AND t_en.lang = 'en'
+      LEFT JOIN shop_translations t ON t.shop_id = s.id AND t.lang = $1
+      LEFT JOIN shop_translations t_en ON t_en.shop_id = s.id AND t_en.lang = 'en'
       ${where}
       ORDER BY s.created_at DESC
       LIMIT $${paramIdx} OFFSET $${paramIdx + 1}
@@ -475,11 +466,6 @@ app.get('/api/shops', async (req, res) => {
   }
 });
 
-/**
- * Public: einzelnen Shop holen mit allen Produkten.
- * Aufruf: GET /api/shops/:id?lang=de
- * :id kann sowohl die numerische ID als auch der slug sein.
- */
 app.get('/api/shops/:id', async (req, res) => {
   try {
     const lang = getLang(req);
@@ -487,37 +473,38 @@ app.get('/api/shops/:id', async (req, res) => {
     const isNumeric = /^\d+$/.test(idOrSlug);
 
     const shopRes = await query(`
-      SELECT
-        s.*,
+      SELECT s.*,
         COALESCE(t.description, t_en.description, '') AS description
       FROM shops s
-      LEFT JOIN shop_translations t
-        ON t.shop_id = s.id AND t.lang = $1
-      LEFT JOIN shop_translations t_en
-        ON t_en.shop_id = s.id AND t_en.lang = 'en'
+      LEFT JOIN shop_translations t ON t.shop_id = s.id AND t.lang = $1
+      LEFT JOIN shop_translations t_en ON t_en.shop_id = s.id AND t_en.lang = 'en'
       WHERE ${isNumeric ? 's.id = $2' : 's.slug = $2'}
       LIMIT 1
     `, [lang, isNumeric ? parseInt(idOrSlug, 10) : idOrSlug]);
 
-    if (shopRes.rows.length === 0) {
-      return res.status(404).json({ error: 'Shop not found' });
-    }
+    if (shopRes.rows.length === 0) return res.status(404).json({ error: 'Shop not found' });
 
     const shop = shopRes.rows[0];
 
-    // Produkte (noch JSON, kommt in Etappe 3.3 auf Postgres)
-    const products = load('products').filter(p => String(p.shop_id) === String(shop.id));
+    // Produkte des Shops in der gewuenschten Sprache
+    const productsRes = await query(`
+      SELECT p.id, p.price_usd, p.brand, p.model, p.condition, p.images, p.created_at,
+        COALESCE(t.title, t_def.title, '') AS title
+      FROM products p
+      LEFT JOIN product_translations t ON t.product_id = p.id AND t.lang = $1
+      LEFT JOIN product_translations t_def ON t_def.product_id = p.id AND t_def.lang = p.default_lang
+      WHERE p.shop_id = $2 AND p.active = TRUE
+      ORDER BY p.created_at DESC
+      LIMIT 50
+    `, [lang, shop.id]);
 
-    res.json({ shop, products });
+    res.json({ shop, products: productsRes.rows });
   } catch (err) {
     console.error('GET /api/shops/:id error:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
-/**
- * Admin: alle Shops inkl. ALLER Uebersetzungen.
- */
 app.get('/api/admin/shops', requireAdmin, async (req, res) => {
   try {
     const shops = await query(`SELECT * FROM shops ORDER BY created_at DESC`);
@@ -529,11 +516,7 @@ app.get('/api/admin/shops', requireAdmin, async (req, res) => {
       transByShop[t.shop_id][t.lang] = t.description;
     }
 
-    const data = shops.rows.map(s => ({
-      ...s,
-      translations: transByShop[s.id] || {}
-    }));
-
+    const data = shops.rows.map(s => ({ ...s, translations: transByShop[s.id] || {} }));
     res.json({ data });
   } catch (err) {
     console.error('GET /api/admin/shops error:', err);
@@ -541,18 +524,10 @@ app.get('/api/admin/shops', requireAdmin, async (req, res) => {
   }
 });
 
-/**
- * Admin: neuen Shop anlegen.
- */
 app.post('/api/admin/shops', requireAdmin, async (req, res) => {
-  const {
-    name, slug, owner_id, country, city, email, phone,
-    is_china, logo_url, translations
-  } = req.body || {};
+  const { name, slug, owner_id, country, city, email, phone, is_china, logo_url, translations } = req.body || {};
 
-  if (!name || !name.trim()) {
-    return res.status(400).json({ error: 'Missing shop name' });
-  }
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Missing shop name' });
 
   try {
     const finalSlug = slug ? makeSlug(slug) : makeSlug(name);
@@ -574,34 +549,22 @@ app.post('/api/admin/shops', requireAdmin, async (req, res) => {
       for (const lang of SUPPORTED_LANGS) {
         const desc = translations[lang];
         if (desc && desc.trim()) {
-          await db.insert('shop_translations', {
-            shop_id: newShop.id,
-            lang,
-            description: desc.trim()
-          });
+          await db.insert('shop_translations', { shop_id: newShop.id, lang, description: desc.trim() });
         }
       }
     }
 
     res.json({ success: true, shop: newShop });
   } catch (err) {
-    if (err.code === '23505') {
-      return res.status(400).json({ error: 'Slug already exists' });
-    }
+    if (err.code === '23505') return res.status(400).json({ error: 'Slug already exists' });
     console.error('POST /api/admin/shops error:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
-/**
- * Admin: Shop aktualisieren.
- */
 app.put('/api/admin/shops/:id', requireAdmin, async (req, res) => {
   const id = req.params.id;
-  const {
-    name, slug, owner_id, country, city, email, phone,
-    is_china, logo_url, active, translations
-  } = req.body || {};
+  const { name, slug, owner_id, country, city, email, phone, is_china, logo_url, active, translations } = req.body || {};
 
   try {
     const updates = {};
@@ -616,9 +579,7 @@ app.put('/api/admin/shops/:id', requireAdmin, async (req, res) => {
     if (logo_url !== undefined) updates.logo_url = logo_url || null;
     if (active !== undefined) updates.active = !!active;
 
-    if (Object.keys(updates).length > 0) {
-      await db.update('shops', id, updates);
-    }
+    if (Object.keys(updates).length > 0) await db.update('shops', id, updates);
 
     if (translations && typeof translations === 'object') {
       for (const lang of SUPPORTED_LANGS) {
@@ -626,16 +587,12 @@ app.put('/api/admin/shops/:id', requireAdmin, async (req, res) => {
         if (desc === undefined) continue;
 
         if (desc === null || desc === '') {
-          await query(
-            'DELETE FROM shop_translations WHERE shop_id = $1 AND lang = $2',
-            [id, lang]
-          );
+          await query('DELETE FROM shop_translations WHERE shop_id = $1 AND lang = $2', [id, lang]);
         } else {
           await query(`
             INSERT INTO shop_translations (shop_id, lang, description)
             VALUES ($1, $2, $3)
-            ON CONFLICT (shop_id, lang)
-            DO UPDATE SET description = EXCLUDED.description
+            ON CONFLICT (shop_id, lang) DO UPDATE SET description = EXCLUDED.description
           `, [id, lang, desc.trim()]);
         }
       }
@@ -648,9 +605,6 @@ app.put('/api/admin/shops/:id', requireAdmin, async (req, res) => {
   }
 });
 
-/**
- * Admin: Shop loeschen (cascade loescht auch translations).
- */
 app.delete('/api/admin/shops/:id', requireAdmin, async (req, res) => {
   try {
     const ok = await db.remove('shops', req.params.id);
@@ -661,44 +615,358 @@ app.delete('/api/admin/shops/:id', requireAdmin, async (req, res) => {
   }
 });
 
-/* ---------- PUBLIC: PRODUCTS (noch JSON) ---------- */
-app.get('/api/products', (req, res) => {
-  const { q, category_id, condition, brand, china_only, page = 1, limit = 24 } = req.query;
-  let products = load('products');
+/* ============================================================
+   PRODUCTS (mehrsprachig + Tags + Suche auf Postgres)
+   ============================================================ */
 
-  if (q) {
-    const s = q.toLowerCase();
-    products = products.filter(p =>
-      (p.title || '').toLowerCase().includes(s) ||
-      (p.brand || '').toLowerCase().includes(s) ||
-      (p.model || '').toLowerCase().includes(s) ||
-      (p.oem || '').toLowerCase().includes(s)
-    );
-  }
-  if (category_id) products = products.filter(p => String(p.category_id) === String(category_id));
-  if (condition) products = products.filter(p => p.condition === condition);
-  if (brand) {
-    const b = brand.toLowerCase();
-    products = products.filter(p => (p.brand || '').toLowerCase().includes(b));
-  }
-  if (china_only === '1') {
-    products = products.filter(p => p.is_china_seller || p.shop_is_china);
-  }
+/**
+ * Public: Produkte suchen/filtern in der gewuenschten Sprache.
+ * Aufruf: GET /api/products?lang=de&q=brake&category_id=1&brand=BMW&min_price=10&max_price=100&condition=new&china_only=1&tags=keramik,vorne&sort=newest&page=1&limit=24
+ */
+app.get('/api/products', async (req, res) => {
+  try {
+    const lang = getLang(req);
+    const {
+      q, category_id, condition, brand, model, oem,
+      min_price, max_price, china_only, tags,
+      shop_id, sort = 'newest',
+      page = 1, limit = 24
+    } = req.query;
 
-  const total = products.length;
-  const pg = parseInt(page, 10) || 1;
-  const lim = parseInt(limit, 10) || 24;
-  const start = (pg - 1) * lim;
-  const data = products.slice(start, start + lim);
+    const conditions = ['p.active = TRUE'];
+    const params = [lang];
+    let i = 2;
 
-  res.json({ data, pagination: { total, pages: Math.max(1, Math.ceil(total / lim)), page: pg } });
+    // Filter
+    if (category_id) { conditions.push(`p.category_id = $${i++}`); params.push(parseInt(category_id, 10)); }
+    if (shop_id) { conditions.push(`p.shop_id = $${i++}`); params.push(parseInt(shop_id, 10)); }
+    if (condition) { conditions.push(`p.condition = $${i++}`); params.push(condition); }
+    if (brand) { conditions.push(`p.brand ILIKE $${i++}`); params.push('%' + brand + '%'); }
+    if (model) { conditions.push(`p.model ILIKE $${i++}`); params.push('%' + model + '%'); }
+    if (oem) { conditions.push(`p.oem = $${i++}`); params.push(oem.trim()); }
+    if (min_price) { conditions.push(`p.price_usd >= $${i++}`); params.push(parseFloat(min_price)); }
+    if (max_price) { conditions.push(`p.price_usd <= $${i++}`); params.push(parseFloat(max_price)); }
+    if (china_only === '1') conditions.push(`p.is_china_seller = TRUE`);
+
+    // Tag-Filter (Produkt muss alle angegebenen Tags haben)
+    if (tags) {
+      const tagSlugs = String(tags).split(',').map(t => makeSlug(t)).filter(Boolean);
+      if (tagSlugs.length > 0) {
+        conditions.push(`p.id IN (
+          SELECT pt.product_id FROM product_tags pt
+          JOIN tags t ON t.id = pt.tag_id
+          WHERE t.slug = ANY($${i}::text[])
+          GROUP BY pt.product_id
+          HAVING COUNT(DISTINCT t.slug) = $${i + 1}
+        )`);
+        params.push(tagSlugs, tagSlugs.length);
+        i += 2;
+      }
+    }
+
+    // Volltext-Suche im Title/Description (in der aktuellen Sprache + Fallback)
+    if (q && q.trim()) {
+      conditions.push(`p.id IN (
+        SELECT pt.product_id FROM product_translations pt
+        WHERE (pt.title ILIKE $${i} OR pt.description ILIKE $${i})
+      )`);
+      params.push('%' + q.trim() + '%');
+      i++;
+    }
+
+    const where = 'WHERE ' + conditions.join(' AND ');
+
+    // Sortierung
+    let orderBy = 'p.created_at DESC';
+    if (sort === 'price_asc') orderBy = 'p.price_usd ASC';
+    else if (sort === 'price_desc') orderBy = 'p.price_usd DESC';
+    else if (sort === 'popular') orderBy = 'p.view_count DESC, p.created_at DESC';
+
+    // Total count
+    const countRes = await query(`SELECT COUNT(*) AS c FROM products p ${where}`, params.slice(1));
+    const total = parseInt(countRes.rows[0].c, 10);
+
+    // Pagination
+    const pg = Math.max(1, parseInt(page, 10) || 1);
+    const lim = Math.min(100, Math.max(1, parseInt(limit, 10) || 24));
+    const offset = (pg - 1) * lim;
+
+    params.push(lim, offset);
+
+    const result = await query(`
+      SELECT
+        p.id, p.price_usd, p.brand, p.model, p.oem, p.condition,
+        p.category_id, p.shop_id, p.images, p.stock, p.is_china_seller,
+        p.default_lang, p.created_at,
+        COALESCE(t.title, t_def.title, '') AS title,
+        COALESCE(t.description, t_def.description, '') AS description,
+        s.name AS shop_name, s.slug AS shop_slug
+      FROM products p
+      LEFT JOIN product_translations t ON t.product_id = p.id AND t.lang = $1
+      LEFT JOIN product_translations t_def ON t_def.product_id = p.id AND t_def.lang = p.default_lang
+      LEFT JOIN shops s ON s.id = p.shop_id
+      ${where}
+      ORDER BY ${orderBy}
+      LIMIT $${i} OFFSET $${i + 1}
+    `, params);
+
+    res.json({
+      data: result.rows,
+      pagination: { total, pages: Math.max(1, Math.ceil(total / lim)), page: pg, limit: lim }
+    });
+  } catch (err) {
+    console.error('GET /api/products error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.get('/api/products/:id', (req, res) => {
-  const products = load('products');
-  const p = products.find(x => String(x.id) === String(req.params.id));
-  if (!p) return res.status(404).json({ error: 'Product not found' });
-  res.json(p);
+/**
+ * Public: einzelnes Produkt mit allen Details.
+ * Erhoeht view_count automatisch.
+ */
+app.get('/api/products/:id', async (req, res) => {
+  try {
+    const lang = getLang(req);
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ error: 'Invalid product id' });
+
+    const result = await query(`
+      SELECT
+        p.*,
+        COALESCE(t.title, t_def.title, '') AS title,
+        COALESCE(t.description, t_def.description, '') AS description,
+        s.name AS shop_name, s.slug AS shop_slug, s.country AS shop_country,
+        c.slug AS category_slug,
+        COALESCE(ct.name, ct_en.name, c.slug) AS category_name
+      FROM products p
+      LEFT JOIN product_translations t ON t.product_id = p.id AND t.lang = $1
+      LEFT JOIN product_translations t_def ON t_def.product_id = p.id AND t_def.lang = p.default_lang
+      LEFT JOIN shops s ON s.id = p.shop_id
+      LEFT JOIN categories c ON c.id = p.category_id
+      LEFT JOIN category_translations ct ON ct.category_id = c.id AND ct.lang = $1
+      LEFT JOIN category_translations ct_en ON ct_en.category_id = c.id AND ct_en.lang = 'en'
+      WHERE p.id = $2 AND p.active = TRUE
+    `, [lang, id]);
+
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
+
+    const product = result.rows[0];
+
+    // Tags holen
+    const tagsRes = await query(`
+      SELECT t.id, t.slug FROM tags t
+      JOIN product_tags pt ON pt.tag_id = t.id
+      WHERE pt.product_id = $1
+      ORDER BY t.slug
+    `, [id]);
+    product.tags = tagsRes.rows;
+
+    // view_count erhoehen (fire-and-forget)
+    query('UPDATE products SET view_count = view_count + 1 WHERE id = $1', [id]).catch(() => {});
+
+    res.json(product);
+  } catch (err) {
+    console.error('GET /api/products/:id error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Admin/Seller: alle Produkte im Admin-Format.
+ */
+app.get('/api/admin/products', requireAdmin, async (req, res) => {
+  try {
+    const products = await query(`SELECT * FROM products ORDER BY created_at DESC`);
+    const trans = await query(`SELECT product_id, lang, title, description FROM product_translations`);
+
+    const transByProd = {};
+    for (const t of trans.rows) {
+      if (!transByProd[t.product_id]) transByProd[t.product_id] = {};
+      transByProd[t.product_id][t.lang] = { title: t.title, description: t.description };
+    }
+
+    const data = products.rows.map(p => ({ ...p, translations: transByProd[p.id] || {} }));
+    res.json({ data });
+  } catch (err) {
+    console.error('GET /api/admin/products error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Admin/Seller: neues Produkt anlegen.
+ * Pflicht: default_lang + translations[default_lang].title + price_usd
+ * Body: {
+ *   default_lang: 'de',
+ *   translations: { de: { title: 'Bremsbelag', description: '...' } },
+ *   price_usd: 49.99,
+ *   brand: 'Bosch', model: 'F10', oem: '34116794917',
+ *   category_id: 1, shop_id: 5, seller_id: 12,
+ *   condition: 'new', stock: 100, is_china_seller: false,
+ *   images: ['https://...', 'https://...'],
+ *   tags: ['bremsbelag', 'vorne', 'keramik']
+ * }
+ */
+app.post('/api/admin/products', requireAdmin, async (req, res) => {
+  const {
+    default_lang, translations, price_usd, brand, model, oem,
+    category_id, shop_id, seller_id, condition, stock, is_china_seller,
+    images, tags
+  } = req.body || {};
+
+  // Validierung
+  if (!default_lang || !SUPPORTED_LANGS.includes(default_lang)) {
+    return res.status(400).json({ error: 'default_lang must be one of: ' + SUPPORTED_LANGS.join(', ') });
+  }
+  if (!translations || typeof translations !== 'object') {
+    return res.status(400).json({ error: 'Missing translations object' });
+  }
+  if (!translations[default_lang] || !translations[default_lang].title || !translations[default_lang].title.trim()) {
+    return res.status(400).json({ error: `Title in default language (${default_lang}) is required` });
+  }
+  if (price_usd === undefined || price_usd === null || isNaN(parseFloat(price_usd))) {
+    return res.status(400).json({ error: 'Valid price_usd is required' });
+  }
+
+  try {
+    // Produkt anlegen
+    const newProd = await db.insert('products', {
+      default_lang,
+      price_usd: parseFloat(price_usd),
+      brand: brand ? brand.trim() : null,
+      model: model ? model.trim() : null,
+      oem: oem ? oem.trim() : null,
+      condition: condition || 'new',
+      category_id: category_id ? parseInt(category_id, 10) : null,
+      shop_id: shop_id ? parseInt(shop_id, 10) : null,
+      seller_id: seller_id ? parseInt(seller_id, 10) : null,
+      stock: stock ? parseInt(stock, 10) : 0,
+      is_china_seller: !!is_china_seller,
+      images: JSON.stringify(Array.isArray(images) ? images : []),
+      active: true
+    });
+
+    // Uebersetzungen einfuegen
+    for (const lang of SUPPORTED_LANGS) {
+      const tr = translations[lang];
+      if (tr && tr.title && tr.title.trim()) {
+        await db.insert('product_translations', {
+          product_id: newProd.id,
+          lang,
+          title: tr.title.trim(),
+          description: tr.description ? tr.description.trim() : null
+        });
+      }
+    }
+
+    // Tags verknuepfen
+    if (Array.isArray(tags) && tags.length > 0) {
+      const tagIds = await resolveTags(tags);
+      for (const tagId of tagIds) {
+        await query(
+          'INSERT INTO product_tags (product_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+          [newProd.id, tagId]
+        );
+      }
+    }
+
+    res.json({ success: true, product: newProd });
+  } catch (err) {
+    console.error('POST /api/admin/products error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Admin/Seller: Produkt aktualisieren.
+ */
+app.put('/api/admin/products/:id', requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!id) return res.status(400).json({ error: 'Invalid product id' });
+
+  const {
+    default_lang, translations, price_usd, brand, model, oem,
+    category_id, shop_id, seller_id, condition, stock, is_china_seller,
+    images, active, tags
+  } = req.body || {};
+
+  try {
+    const updates = {};
+    if (default_lang !== undefined && SUPPORTED_LANGS.includes(default_lang)) {
+      updates.default_lang = default_lang;
+    }
+    if (price_usd !== undefined) updates.price_usd = parseFloat(price_usd);
+    if (brand !== undefined) updates.brand = brand ? brand.trim() : null;
+    if (model !== undefined) updates.model = model ? model.trim() : null;
+    if (oem !== undefined) updates.oem = oem ? oem.trim() : null;
+    if (condition !== undefined) updates.condition = condition;
+    if (category_id !== undefined) updates.category_id = category_id ? parseInt(category_id, 10) : null;
+    if (shop_id !== undefined) updates.shop_id = shop_id ? parseInt(shop_id, 10) : null;
+    if (seller_id !== undefined) updates.seller_id = seller_id ? parseInt(seller_id, 10) : null;
+    if (stock !== undefined) updates.stock = parseInt(stock, 10) || 0;
+    if (is_china_seller !== undefined) updates.is_china_seller = !!is_china_seller;
+    if (images !== undefined) updates.images = JSON.stringify(Array.isArray(images) ? images : []);
+    if (active !== undefined) updates.active = !!active;
+
+    if (Object.keys(updates).length > 0) await db.update('products', id, updates);
+
+    // Uebersetzungen
+    if (translations && typeof translations === 'object') {
+      for (const lang of SUPPORTED_LANGS) {
+        const tr = translations[lang];
+        if (tr === undefined) continue;
+
+        if (tr === null || (!tr.title && !tr.description)) {
+          await query('DELETE FROM product_translations WHERE product_id = $1 AND lang = $2', [id, lang]);
+        } else if (tr.title && tr.title.trim()) {
+          await query(`
+            INSERT INTO product_translations (product_id, lang, title, description)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (product_id, lang) DO UPDATE
+            SET title = EXCLUDED.title, description = EXCLUDED.description
+          `, [id, lang, tr.title.trim(), tr.description ? tr.description.trim() : null]);
+        }
+      }
+    }
+
+    // Tags neu verknuepfen (alte loeschen, neue setzen)
+    if (Array.isArray(tags)) {
+      await query('DELETE FROM product_tags WHERE product_id = $1', [id]);
+      if (tags.length > 0) {
+        const tagIds = await resolveTags(tags);
+        for (const tagId of tagIds) {
+          await query(
+            'INSERT INTO product_tags (product_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [id, tagId]
+          );
+        }
+      }
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('PUT /api/admin/products error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/admin/products/:id', requireAdmin, async (req, res) => {
+  try {
+    const ok = await db.remove('products', req.params.id);
+    res.json({ success: true, deleted: ok ? 1 : 0 });
+  } catch (err) {
+    console.error('DELETE /api/admin/products error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ---------- SELLER (selbst Produkte verwalten - noch alte JSON-Variante) ---------- */
+app.post('/api/seller/products', (req, res) => {
+  res.status(501).json({ error: 'Seller-Endpoint noch nicht auf neue DB-Struktur angepasst. Nutze /api/admin/products.' });
+});
+
+app.post('/api/seller/csv-import', upload.single('file'), (req, res) => {
+  res.json({ success: true, message: 'CSV received (parsing not implemented in demo).' });
 });
 
 /* ---------- PUBLIC: BANNERS (noch JSON) ---------- */
@@ -729,24 +997,6 @@ app.post('/api/orders', (req, res) => {
   res.json({ success: true, order });
 });
 
-/* ---------- SELLER (noch JSON) ---------- */
-app.post('/api/seller/products', (req, res) => {
-  const p = req.body || {};
-  if (!p.title || !p.price_usd) {
-    return res.status(400).json({ error: 'Missing title or price' });
-  }
-  const products = load('products');
-  p.id = Date.now().toString();
-  p.created_at = new Date().toISOString();
-  products.push(p);
-  save('products', products);
-  res.json({ success: true, product: p });
-});
-
-app.post('/api/seller/csv-import', upload.single('file'), (req, res) => {
-  res.json({ success: true, message: 'CSV received (parsing not implemented in demo).' });
-});
-
 /* ============================================================
    ADMIN ROUTES (Rest noch JSON)
    ============================================================ */
@@ -757,44 +1007,6 @@ app.get('/api/admin/users', requireAdmin, (req, res) => {
     return safe;
   });
   res.json({ data: users });
-});
-
-app.get('/api/admin/products', requireAdmin, (req, res) => {
-  res.json({ data: load('products') });
-});
-
-app.post('/api/admin/products', requireAdmin, (req, res) => {
-  const p = req.body || {};
-  if (!p.title || !p.price_usd) {
-    return res.status(400).json({ error: 'Missing title or price' });
-  }
-  const products = load('products');
-  const product = {
-    id: Date.now().toString(),
-    title: p.title,
-    price_usd: p.price_usd,
-    brand: p.brand || '',
-    model: p.model || '',
-    oem: p.oem || '',
-    category_id: p.category_id || null,
-    seller_id: p.seller_id || null,
-    shop_id: p.shop_id || null,
-    condition: p.condition || 'new',
-    images: p.images || [],
-    created_at: new Date().toISOString()
-  };
-  products.push(product);
-  save('products', products);
-  res.json({ success: true, product });
-});
-
-app.delete('/api/admin/products/:id', requireAdmin, (req, res) => {
-  const { id } = req.params;
-  let products = load('products');
-  const before = products.length;
-  products = products.filter(p => String(p.id) !== String(id));
-  save('products', products);
-  res.json({ success: true, deleted: before - products.length });
 });
 
 app.get('/api/admin/banners', requireAdmin, (req, res) => {
@@ -837,9 +1049,7 @@ app.use('/api/*', (req, res) => {
 
 app.get('*', (req, res) => {
   const indexPath = path.join(publicDir, 'index.html');
-  if (fs.existsSync(indexPath)) {
-    return res.sendFile(indexPath);
-  }
+  if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
   res.status(404).json({ error: 'index.html not found in ' + publicDir });
 });
 
