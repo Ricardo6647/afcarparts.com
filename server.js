@@ -27,6 +27,7 @@ const HOST = '0.0.0.0';
 const allowedOrigins = [
   'https://afcarparts.com',
   'https://www.afcarparts.com',
+  'https://afcarparts-com.onrender.com',
   'http://localhost:3000',
   'http://localhost:5000',
   'http://127.0.0.1:5500'
