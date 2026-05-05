@@ -1,7 +1,7 @@
 // userDb.js — User-DB-Layer
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const { query } = require('./storeDb'); // ← passt zur bestehenden Konvention
+const { query } = require('./storeDb');
 
 const BCRYPT_ROUNDS = 12;
 const MAX_FAILED_ATTEMPTS = 5;
@@ -12,7 +12,6 @@ const normalizeEmail = (e) => String(e || '').trim().toLowerCase();
 const generateToken = () => crypto.randomBytes(32).toString('hex');
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
-// === REGISTER ===
 async function registerUser({ email, password, name, role = 'customer', whatsapp = null }) {
   const e = normalizeEmail(email);
   if (!e || !password) throw new Error('email_password_required');
@@ -34,7 +33,6 @@ async function registerUser({ email, password, name, role = 'customer', whatsapp
   }
 }
 
-// === LOGIN ===
 async function loginUser({ email, password, ip = null }) {
   const e = normalizeEmail(email);
   if (!e || !password) throw new Error('email_password_required');
@@ -90,7 +88,6 @@ async function loginUser({ email, password, ip = null }) {
   };
 }
 
-// === REFRESH TOKENS ===
 async function createRefreshToken(userId, { userAgent, ip, ttlDays = 30 }) {
   const raw = generateToken();
   await query(
@@ -129,7 +126,6 @@ async function revokeAllUserTokens(userId) {
   );
 }
 
-// === PASSWORD MANAGEMENT ===
 async function changePassword(userId, oldPassword, newPassword) {
   if (!newPassword || newPassword.length < 8) throw new Error('password_too_short');
   const { rows } = await query('SELECT password_hash FROM users WHERE id = $1', [userId]);
