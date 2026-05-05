@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Händler-Dashboard | AFRICARPARTS</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --danger: #dc2626;
+      --danger-hover: #b91c1c;
+      --success: #16a34a;
+      --bg: #f3f4f6;
+      --card: #ffffff;
+      --border: #e5e7eb;
+      --text: #111827;
+      --text-muted: #6b7280;
+      --shadow: 0 1px 3px rgba(0,0,0,.08);
+      --radius: 8px;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+    
+    .hidden { display: none !important; }
+    
+    /* ===== LOGIN SCREEN ===== */
+    #login-screen {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    
+    .login-card {
+      background: var(--card);
+      padding: 40px;
+      border-radius: var(--radius);
+      box-shadow: 0 4px 20px rgba(0,0,0,.1);
+      width: 100%;
+      max-width: 420px;
+    }
+    
+    .login-card h1 {
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+    
+    .login-card .subtitle {
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      font-size: 14px;
+    }
+    
+    /* ===== FORMS ===== */
+    .form-group {
+      margin-bottom: 16px;
+    }
+    
+    .form-group label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+    
+    .form-group .hint {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    
+    input[type="text"], input[type="email"], input[type="password"],
+    input[type="number"], select, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-family: inherit;
+      background: var(--card);
+      transition: border-color .15s;
+    }
+    
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+    }
+    
+    textarea { resize: vertical; min-height: 80px; }
+    
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    
+    /* ===== BUTTONS ===== */
+    button, .btn {
+      padding: 10px 16px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background .15s;
+      font-family: inherit;
+    }
+    
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+    
+    .btn-secondary {
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { background: var(--bg); }
+    
+    .btn-danger {
+      background: var(--danger);
+      color: white;
+    }
+    .btn-danger:hover { background: var(--danger-hover); }
+    
+    .btn-block { width: 100%; }
+    
+    .btn-sm { padding: 6px 10px; font-size: 13px; }
+    
+    /* ===== ALERTS ===== */
+    .alert {
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      margin: 12px 0;
+    }
+    .alert-error {
+      background: #fef2f2;
+      color: var(--danger);
+      border: 1px solid #fecaca;
+    }
+    .alert-success {
+      background: #f0fdf4;
+      color: var(--success);
+      border: 1px solid #bbf7d0;
+    }
+    
+    /* ===== HEADER ===== */
+    header {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    
+    header .brand {
+      font-weight: 700;
+      font-size: 18px;
+      color: var(--primary);
+    }
+    
+    header .user-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 14px;
+    }
+    
+    header .user-email {
+      color: var(--text-muted);
+    }
+    
+    header .user-role {
+      background: var(--bg);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    
+    /* ===== MAIN ===== */
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    
+    .section-header h2 {
+      font-size: 22px;
+      font-weight: 600;
+    }
+    
+    /* ===== TABLE ===== */
+    .products-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    
+    table th {
+      background: var(--bg);
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      color: var(--text-muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    table td {
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    
+    table tbody tr:hover { background: #fafafa; }
+    table tbody tr:last-child td { border-bottom: none; }
+    
+    .product-thumb {
+      width: 50px;
+      height: 50px;
+      object-fit: cover;
+      border-radius: 4px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+    }
+    
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    
+    .badge-active { background: #dcfce7; color: #166534; }
+    .badge-inactive { background: #fee2e2; color: #991b1b; }
+    
+    .table-actions {
+      display: flex;
+      gap: 6px;
+    }
+    
+    .empty-state {
+      padding: 60px 20px;
+      text-align: center;
+      color: var(--text-muted);
+    }
+    
+    .loading {
+      padding: 40px;
+      text-align: center;
+      color: var(--text-muted);
+    }
+    
+    /* ===== MODAL ===== */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 20px;
+    }
+    
+    .modal {
+      background: var(--card);
+      border-radius: var(--radius);
+      width: 100%;
+      max-width: 720px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,.2);
+    }
+    
+    .modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      background: var(--card);
+      z-index: 1;
+    }
+    
+    .modal-header h3 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+    
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: var(--text-muted);
+      padding: 0;
+      width: 32px;
+      height: 32px;
+    }
+    
+    .modal-body {
+      padding: 24px;
+    }
+    
+    .modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      position: sticky;
+      bottom: 0;
+      background: var(--card);
+    }
+    
+    /* ===== IMAGE UPLOAD ===== */
+    .image-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 12px;
+      margin-top: 8px;
+    }
+    
+    .image-thumb {
+      position: relative;
+      aspect-ratio: 1;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--bg);
+    }
+    
+    .image-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    
+    .image-thumb .remove-img {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      background: rgba(0,0,0,.6);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+    }
+    
+    .image-upload-btn {
+      aspect-ratio: 1;
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      background: var(--bg);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      font-size: 13px;
+      gap: 4px;
+      transition: border-color .15s;
+    }
+    
+    .image-upload-btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+    
+    /* ===== ACCORDION (Übersetzungen) ===== */
+    .accordion {
+      margin-top: 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    
+    .accordion-header {
+      padding: 10px 14px;
+      background: var(--bg);
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .accordion-content {
+      padding: 14px;
+      border-top: 1px solid var(--border);
+    }
+    
+    .accordion.closed .accordion-content { display: none; }
+    .accordion.closed .accordion-arrow { transform: rotate(-90deg); }
+    
+    .accordion-arrow { transition: transform .15s; }
+    
+    /* Mobile */
+    @media (max-width: 640px) {
+      .form-row { grid-template-columns: 1fr; }
+      header { padding: 10px 14px; }
+      header .user-email { display: none; }
+      main { padding: 14px; }
+      table th:nth-child(3), table td:nth-child(3),
+      table th:nth-child(4), table td:nth-child(4) { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ============================================================
+     LOGIN SCREEN
+     ============================================================ -->
+<div id="login-screen">
+  <div class="login-card">
+    <h1>Händler-Login</h1>
+    <p class="subtitle">Melde dich an, um deine Produkte zu verwalten.</p>
+    
+    <form id="login-form">
+      <div class="form-group">
+        <label for="login-email">E-Mail</label>
+        <input type="email" id="login-email" required autocomplete="email">
+      </div>
+      
+      <div class="form-group">
+        <label for="login-password">Passwort</label>
+        <input type="password" id="login-password" required autocomplete="current-password">
+      </div>
+      
+      <div id="login-error" class="alert alert-error hidden"></div>
+      
+      <button type="submit" class="btn btn-primary btn-block" id="login-submit">
+        Einloggen
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- ============================================================
+     DASHBOARD
+     ============================================================ -->
+<div id="dashboard-screen" class="hidden">
+  <header>
+    <div class="brand">AFRICARPARTS</div>
+    <div class="user-info">
+      <span class="user-email" id="header-email"></span>
+      <span class="user-role" id="header-role"></span>
+      <button class="btn btn-secondary btn-sm" id="logout-btn">Logout</button>
+    </div>
+  </header>
+  
+  <main>
+    <div class="section-header">
+      <h2>Meine Produkte</h2>
+      <button class="btn btn-primary" id="new-product-btn">+ Neues Produkt</button>
+    </div>
+    
+    <div class="products-card">
+      <div id="products-content">
+        <div class="loading">Lade Produkte…</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ============================================================
+     PRODUCT MODAL
+     ============================================================ -->
+<div id="product-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-title">Neues Produkt</h3>
+      <button class="modal-close" id="modal-close-btn">×</button>
+    </div>
+    
+    <form id="product-form">
+      <div class="modal-body">
+        <div id="product-error" class="alert alert-error hidden"></div>
+        
+        <!-- Default Language -->
+        <div class="form-group">
+          <label for="default-lang">Standard-Sprache *</label>
+          <select id="default-lang" name="default_lang" required>
+            <option value="de">Deutsch</option>
+            <option value="en">English</option>
+            <option value="fr">Français</option>
+            <option value="pt">Português</option>
+            <option value="ar">العربية</option>
+          </select>
+          <div class="hint">In dieser Sprache muss mindestens der Titel ausgefüllt sein.</div>
+        </div>
+        
+        <!-- Title in default language -->
+        <div class="form-group">
+          <label for="default-title">Titel <span id="title-lang-hint">(de)</span> *</label>
+          <input type="text" id="default-title" required maxlength="200">
+        </div>
+        
+        <!-- Description in default language -->
+        <div class="form-group">
+          <label for="default-description">Beschreibung <span id="desc-lang-hint">(de)</span></label>
+          <textarea id="default-description" rows="4"></textarea>
+        </div>
+        
+        <!-- Other languages (collapsible) -->
+        <div class="accordion closed" id="other-langs-accordion">
+          <div class="accordion-header" id="other-langs-header">
+            <span>+ Andere Sprachen (optional)</span>
+            <span class="accordion-arrow">▼</span>
+          </div>
+          <div class="accordion-content" id="other-langs-content">
+            <!-- Other language fields rendered dynamically -->
+          </div>
+        </div>
+        
+        <!-- Price + Stock -->
+        <div class="form-row" style="margin-top: 16px;">
+          <div class="form-group">
+            <label for="price">Preis (USD) *</label>
+            <input type="number" id="price" required min="0" step="0.01">
+          </div>
+          <div class="form-group">
+            <label for="stock">Lagerbestand</label>
+            <input type="number" id="stock" min="0" value="0">
+          </div>
+        </div>
+        
+        <!-- Brand + Model -->
+        <div class="form-row">
+          <div class="form-group">
+            <label for="brand">Marke</label>
+            <input type="text" id="brand" maxlength="100" placeholder="z.B. Bosch">
+          </div>
+          <div class="form-group">
+            <label for="model">Modell</label>
+            <input type="text" id="model" maxlength="100" placeholder="z.B. F10">
+          </div>
+        </div>
+        
+        <!-- OEM + Condition -->
+        <div class="form-row">
+          <div class="form-group">
+            <label for="oem">OEM-Nummer</label>
+            <input type="text" id="oem" maxlength="100" placeholder="z.B. 34116794917">
+          </div>
+          <div class="form-group">
+            <label for="condition">Zustand</label>
+            <select id="condition">
+              <option value="new">Neu</option>
+              <option value="used">Gebraucht</option>
+              <option value="refurbished">Generalüberholt</option>
+            </select>
+          </div>
+        </div>
+        
+        <!-- Category -->
+        <div class="form-group">
+          <label for="category">Kategorie</label>
+          <select id="category">
+            <option value="">— Keine Kategorie —</option>
+          </select>
+        </div>
+        
+        <!-- Tags -->
+        <div class="form-group">
+          <label for="tags">Tags</label>
+          <input type="text" id="tags" placeholder="z.B. bremsbelag, vorne, keramik">
+          <div class="hint">Komma-getrennt. Max. 50 Zeichen pro Tag.</div>
+        </div>
+        
+        <!-- Images -->
+        <div class="form-group">
+          <label>Bilder (max. 5, JPG/PNG, max. 2 MB pro Bild)</label>
+          <div class="image-grid" id="image-grid"></div>
+          <input type="file" id="image-input" accept="image/jpeg,image/png" multiple style="display:none">
+        </div>
+        
+        <!-- Active -->
+        <div class="form-group">
+          <label style="display:flex; align-items:center; gap:8px; font-weight: normal;">
+            <input type="checkbox" id="active" checked style="width:auto">
+            Produkt ist aktiv (sichtbar im Marktplatz)
+          </label>
+        </div>
+      </div>
+      
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="cancel-btn">Abbrechen</button>
+        <button type="submit" class="btn btn-primary" id="save-btn">Speichern</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ============================================================
+// STATE & CONFIG
+// ============================================================
+
+const API = ''; // gleiche Origin
+const SUPPORTED_LANGS = ['de', 'en', 'fr', 'pt', 'ar'];
+const LANG_LABELS = { de: 'Deutsch', en: 'English', fr: 'Français', pt: 'Português', ar: 'العربية' };
+
+let state = {
+  jwt: null,
+  user: null,
+  products: [],
+  categories: [],
+  editingId: null,
+  uploadedImages: [], // URLs der hochgeladenen Bilder
+};
+
+// ============================================================
+// API HELPERS
+// ============================================================
+
+async function api(path, options = {}) {
+  const opts = { ...options, headers: { ...(options.headers || {}) } };
+  if (state.jwt) opts.headers['Authorization'] = 'Bearer ' + state.jwt;
+  if (opts.body && typeof opts.body !== 'string' && !(opts.body instanceof FormData)) {
+    opts.body = JSON.stringify(opts.body);
+    opts.headers['Content-Type'] = 'application/json';
+  }
+  const res = await fetch(API + path, opts);
+  if (res.status === 401) {
+    logout();
+    throw new Error('Sitzung abgelaufen — bitte erneut einloggen.');
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+// ============================================================
+// AUTH
+// ============================================================
+
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const submit = document.getElementById('login-submit');
+  const errorEl = document.getElementById('login-error');
+  errorEl.classList.add('hidden');
+  submit.disabled = true;
+  submit.textContent = 'Einloggen…';
+  
+  try {
+    const email = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    const data = await api('/api/auth/login', {
+      method: 'POST',
+      body: { email, password },
+    });
+    
+    state.jwt = data.accessToken;
+    state.user = data.user;
+    localStorage.setItem('jwt', state.jwt);
+    localStorage.setItem('user', JSON.stringify(state.user));
+    showDashboard();
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.classList.remove('hidden');
+  } finally {
+    submit.disabled = false;
+    submit.textContent = 'Einloggen';
+  }
+});
+
+document.getElementById('logout-btn').addEventListener('click', logout);
+
+function logout() {
+  state.jwt = null;
+  state.user = null;
+  localStorage.removeItem('jwt');
+  localStorage.removeItem('user');
+  // Optional: Backend abmelden
+  fetch(API + '/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('dashboard-screen').classList.add('hidden');
+}
+
+// ============================================================
+// DASHBOARD INIT
+// ============================================================
+
+async function showDashboard() {
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('dashboard-screen').classList.remove('hidden');
+  document.getElementById('header-email').textContent = state.user.email || '';
+  document.getElementById('header-role').textContent = state.user.role || '';
+  
+  await Promise.all([loadProducts(), loadCategories()]);
+}
+
+async function loadProducts() {
+  const container = document.getElementById('products-content');
+  container.innerHTML = '<div class="loading">Lade Produkte…</div>';
+  try {
+    const data = await api('/api/seller/products');
+    state.products = data.data || [];
+    renderProducts();
+  } catch (err) {
+    container.innerHTML = `<div class="empty-state">Fehler: ${escape(err.message)}</div>`;
+  }
+}
+
+async function loadCategories() {
+  try {
+    const data = await api('/api/categories?lang=de');
+    state.categories = Array.isArray(data) ? data : (data.data || []);
+    renderCategoryOptions();
+  } catch (err) {
+    console.error('Categories load failed:', err);
+  }
+}
+
+function renderCategoryOptions() {
+  const select = document.getElementById('category');
+  select.innerHTML = '<option value="">— Keine Kategorie —</option>';
+  for (const c of state.categories) {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.name;
+    select.appendChild(opt);
+  }
+}
+
+function renderProducts() {
+  const container = document.getElementById('products-content');
+  if (state.products.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <p>Du hast noch keine Produkte angelegt.</p>
+        <p style="margin-top: 8px; font-size: 13px;">Klick oben auf "+ Neues Produkt" um zu starten.</p>
+      </div>`;
+    return;
+  }
+  
+  let html = `
+    <table>
+      <thead>
+        <tr>
+          <th>Bild</th>
+          <th>Titel</th>
+          <th>Marke / Modell</th>
+          <th>OEM</th>
+          <th>Preis</th>
+          <th>Stock</th>
+          <th>Status</th>
+          <th>Aktionen</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+  
+  for (const p of state.products) {
+    const images = parseImages(p.images);
+    const thumb = images[0] || '';
+    html += `
+      <tr>
+        <td>${thumb ? `<img src="${escape(thumb)}" class="product-thumb" alt="">` : '<div class="product-thumb"></div>'}</td>
+        <td>${escape(p.title || '(kein Titel)')}</td>
+        <td>${escape([p.brand, p.model].filter(Boolean).join(' '))}</td>
+        <td>${escape(p.oem || '—')}</td>
+        <td>$${parseFloat(p.price_usd).toFixed(2)}</td>
+        <td>${p.stock || 0}</td>
+        <td>${p.active ? '<span class="badge badge-active">Aktiv</span>' : '<span class="badge badge-inactive">Inaktiv</span>'}</td>
+        <td>
+          <div class="table-actions">
+            <button class="btn btn-secondary btn-sm" onclick="editProduct(${p.id})">Bearbeiten</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteProduct(${p.id})">Löschen</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function parseImages(images) {
+  if (!images) return [];
+  if (Array.isArray(images)) return images;
+  try {
+    const parsed = JSON.parse(images);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
+}
+
+function escape(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+// ============================================================
+// PRODUCT MODAL
+// ============================================================
+
+document.getElementById('new-product-btn').addEventListener('click', () => openProductModal(null));
+document.getElementById('cancel-btn').addEventListener('click', closeProductModal);
+document.getElementById('modal-close-btn').addEventListener('click', closeProductModal);
+document.getElementById('product-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'product-modal') closeProductModal();
+});
+
+document.getElementById('default-lang').addEventListener('change', updateLangHints);
+document.getElementById('other-langs-header').addEventListener('click', () => {
+  document.getElementById('other-langs-accordion').classList.toggle('closed');
+});
+
+function updateLangHints() {
+  const lang = document.getElementById('default-lang').value;
+  document.getElementById('title-lang-hint').textContent = `(${lang})`;
+  document.getElementById('desc-lang-hint').textContent = `(${lang})`;
+  renderOtherLangFields();
+}
+
+function renderOtherLangFields() {
+  const defaultLang = document.getElementById('default-lang').value;
+  const container = document.getElementById('other-langs-content');
+  container.innerHTML = '';
+  for (const lang of SUPPORTED_LANGS) {
+    if (lang === defaultLang) continue;
+    const div = document.createElement('div');
+    div.style.marginBottom = '12px';
+    div.innerHTML = `
+      <div class="form-group">
+        <label>Titel (${LANG_LABELS[lang]})</label>
+        <input type="text" data-lang="${lang}" data-field="title" maxlength="200">
+      </div>
+      <div class="form-group">
+        <label>Beschreibung (${LANG_LABELS[lang]})</label>
+        <textarea data-lang="${lang}" data-field="description" rows="2"></textarea>
+      </div>
+      <hr style="border: none; border-top: 1px solid var(--border); margin: 8px 0;">
+    `;
+    container.appendChild(div);
+  }
+}
+
+async function openProductModal(productId) {
+  state.editingId = productId;
+  state.uploadedImages = [];
+  document.getElementById('product-error').classList.add('hidden');
+  document.getElementById('modal-title').textContent = productId ? 'Produkt bearbeiten' : 'Neues Produkt';
+  
+  // Reset form
+  document.getElementById('product-form').reset();
+  document.getElementById('default-lang').value = 'de';
+  document.getElementById('active').checked = true;
+  document.getElementById('other-langs-accordion').classList.add('closed');
+  updateLangHints();
+  
+  if (productId) {
+    // Load existing product
+    try {
+      const p = await api(`/api/seller/products/${productId}`);
+      document.getElementById('default-lang').value = p.default_lang || 'de';
+      updateLangHints();
+      
+      const defLang = p.default_lang || 'de';
+      const defTrans = (p.translations || {})[defLang] || {};
+      document.getElementById('default-title').value = defTrans.title || '';
+      document.getElementById('default-description').value = defTrans.description || '';
+      
+      // Other langs
+      for (const lang of SUPPORTED_LANGS) {
+        if (lang === defLang) continue;
+        const tr = (p.translations || {})[lang];
+        if (tr) {
+          const titleEl = document.querySelector(`[data-lang="${lang}"][data-field="title"]`);
+          const descEl = document.querySelector(`[data-lang="${lang}"][data-field="description"]`);
+          if (titleEl) titleEl.value = tr.title || '';
+          if (descEl) descEl.value = tr.description || '';
+        }
+      }
+      
+      document.getElementById('price').value = p.price_usd || '';
+      document.getElementById('stock').value = p.stock || 0;
+      document.getElementById('brand').value = p.brand || '';
+      document.getElementById('model').value = p.model || '';
+      document.getElementById('oem').value = p.oem || '';
+      document.getElementById('condition').value = p.condition || 'new';
+      document.getElementById('category').value = p.category_id || '';
+      document.getElementById('tags').value = (p.tags || []).join(', ');
+      document.getElementById('active').checked = !!p.active;
+      
+      state.uploadedImages = parseImages(p.images);
+    } catch (err) {
+      alert('Fehler beim Laden: ' + err.message);
+      return;
+    }
+  }
+  
+  renderImageGrid();
+  document.getElementById('product-modal').classList.remove('hidden');
+}
+
+function closeProductModal() {
+  document.getElementById('product-modal').classList.add('hidden');
+  state.editingId = null;
+  state.uploadedImages = [];
+}
+
+// ============================================================
+// IMAGE UPLOAD
+// ============================================================
+
+function renderImageGrid() {
+  const grid = document.getElementById('image-grid');
+  grid.innerHTML = '';
+  
+  for (let i = 0; i < state.uploadedImages.length; i++) {
+    const url = state.uploadedImages[i];
+    const div = document.createElement('div');
+    div.className = 'image-thumb';
+    div.innerHTML = `
+      <img src="${escape(url)}" alt="">
+      <button type="button" class="remove-img" data-idx="${i}">×</button>
+    `;
+    grid.appendChild(div);
+  }
+  
+  if (state.uploadedImages.length < 5) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'image-upload-btn';
+    btn.innerHTML = `<span style="font-size:24px;">+</span><span>Bild hochladen</span>`;
+    btn.addEventListener('click', () => document.getElementById('image-input').click());
+    grid.appendChild(btn);
+  }
+  
+  // Remove handlers
+  grid.querySelectorAll('.remove-img').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const idx = parseInt(e.target.dataset.idx, 10);
+      state.uploadedImages.splice(idx, 1);
+      renderImageGrid();
+    });
+  });
+}
+
+document.getElementById('image-input').addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files);
+  e.target.value = ''; // reset
+  if (files.length === 0) return;
+  
+  const remaining = 5 - state.uploadedImages.length;
+  if (files.length > remaining) {
+    alert(`Maximal ${remaining} weitere Bild(er) möglich (Limit: 5).`);
+    return;
+  }
+  
+  // Validate
+  for (const f of files) {
+    if (!['image/jpeg', 'image/png'].includes(f.type)) {
+      alert(`"${f.name}" ist kein JPG/PNG.`);
+      return;
+    }
+    if (f.size > 2 * 1024 * 1024) {
+      alert(`"${f.name}" ist größer als 2 MB.`);
+      return;
+    }
+  }
+  
+  // Upload
+  const fd = new FormData();
+  for (const f of files) fd.append('images', f);
+  
+  try {
+    const data = await api('/api/upload/images', { method: 'POST', body: fd });
+    state.uploadedImages.push(...(data.urls || []));
+    renderImageGrid();
+  } catch (err) {
+    alert('Upload-Fehler: ' + err.message);
+  }
+});
+
+// ============================================================
+// SAVE PRODUCT
+// ============================================================
+
+document.getElementById('product-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorEl = document.getElementById('product-error');
+  const saveBtn = document.getElementById('save-btn');
+  errorEl.classList.add('hidden');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Speichern…';
+  
+  try {
+    const defaultLang = document.getElementById('default-lang').value;
+    const translations = {};
+    translations[defaultLang] = {
+      title: document.getElementById('default-title').value.trim(),
+      description: document.getElementById('default-description').value.trim() || null,
+    };
+    
+    // Other langs
+    for (const lang of SUPPORTED_LANGS) {
+      if (lang === defaultLang) continue;
+      const titleEl = document.querySelector(`[data-lang="${lang}"][data-field="title"]`);
+      const descEl = document.querySelector(`[data-lang="${lang}"][data-field="description"]`);
+      const title = titleEl?.value.trim() || '';
+      const desc = descEl?.value.trim() || '';
+      if (title) {
+        translations[lang] = { title, description: desc || null };
+      }
+    }
+    
+    const tagsRaw = document.getElementById('tags').value.trim();
+    const tags = tagsRaw ? tagsRaw.split(',').map(t => t.trim()).filter(Boolean) : [];
+    
+    const payload = {
+      default_lang: defaultLang,
+      translations,
+      price_usd: parseFloat(document.getElementById('price').value),
+      stock: parseInt(document.getElementById('stock').value, 10) || 0,
+      brand: document.getElementById('brand').value.trim() || null,
+      model: document.getElementById('model').value.trim() || null,
+      oem: document.getElementById('oem').value.trim() || null,
+      condition: document.getElementById('condition').value,
+      category_id: document.getElementById('category').value || null,
+      images: state.uploadedImages,
+      tags,
+      active: document.getElementById('active').checked,
+    };
+    
+    if (state.editingId) {
+      await api(`/api/seller/products/${state.editingId}`, { method: 'PUT', body: payload });
+    } else {
+      await api('/api/seller/products', { method: 'POST', body: payload });
+    }
+    
+    closeProductModal();
+    await loadProducts();
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.classList.remove('hidden');
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Speichern';
+  }
+});
+
+// ============================================================
+// EDIT / DELETE (global für onclick)
+// ============================================================
+
+window.editProduct = function(id) {
+  openProductModal(id);
+};
+
+window.deleteProduct = async function(id) {
+  if (!confirm('Produkt wirklich löschen? Das kann nicht rückgängig gemacht werden.')) return;
+  try {
+    await api(`/api/seller/products/${id}`, { method: 'DELETE' });
+    await loadProducts();
+  } catch (err) {
+    alert('Fehler: ' + err.message);
+  }
+};
+
+// ============================================================
+// INIT
+// ============================================================
+
+(async function init() {
+  const savedJwt = localStorage.getItem('jwt');
+  const savedUser = localStorage.getItem('user');
+  
+  if (savedJwt && savedUser) {
+    state.jwt = savedJwt;
+    state.user = JSON.parse(savedUser);
+    
+    // Verify token still valid
+    try {
+      const data = await api('/api/auth/me');
+      state.user = data.user;
+      localStorage.setItem('user', JSON.stringify(state.user));
+      showDashboard();
+    } catch {
+      logout();
+    }
+  }
+})();
+</script>
+
+</body>
+</html>
