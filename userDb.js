@@ -1,4 +1,4 @@
-// userDb.js — User-DB-Layer
+// userDb.js — User-DB-Layer (verwendet 'phone' wie in der echten DB-Spalte)
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { query } = require('./storeDb');
@@ -12,19 +12,22 @@ const normalizeEmail = (e) => String(e || '').trim().toLowerCase();
 const generateToken = () => crypto.randomBytes(32).toString('hex');
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
-async function registerUser({ email, password, name, role = 'customer', whatsapp = null }) {
+async function registerUser({ email, password, name, role = 'customer', phone = null, whatsapp = null, country = null }) {
   const e = normalizeEmail(email);
   if (!e || !password) throw new Error('email_password_required');
   if (password.length < 8) throw new Error('password_too_short');
   if (!['customer', 'dealer'].includes(role)) throw new Error('invalid_role');
 
+  // Backwards-compat: 'whatsapp' aus altem Frontend wird als 'phone' akzeptiert
+  const phoneValue = phone || whatsapp || null;
+
   const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
   try {
     const { rows } = await query(
-      `INSERT INTO users (email, password_hash, name, role, whatsapp)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, email, name, role, email_verified, created_at`,
-      [e, hash, name, role, whatsapp]
+      `INSERT INTO users (email, password_hash, name, role, phone, country)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, email, name, role, phone, country, email_verified, created_at`,
+      [e, hash, name, role, phoneValue, country]
     );
     return rows[0];
   } catch (err) {
@@ -169,7 +172,7 @@ async function resetPassword(token, newPassword) {
 
 async function getUserById(id) {
   const { rows } = await query(
-    `SELECT id, email, name, role, whatsapp, email_verified, last_login_at, created_at
+    `SELECT id, email, name, role, phone, country, email_verified, last_login_at, created_at
      FROM users WHERE id = $1`,
     [id]
   );
