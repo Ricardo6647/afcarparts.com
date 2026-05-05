@@ -188,7 +188,26 @@ app.post('/api/admin/run-migration', async (req, res) => {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
-
+/* ---------- TEMPORÄRER ENDPOINT: Tabellen-Spalten ---------- */
+/* Nach Debugging wieder entfernen */
+app.get('/api/admin/table-columns', async (req, res) => {
+  if (req.query.secret !== process.env.MIGRATION_SECRET) {
+    return res.status(401).json({ error: 'Invalid secret' });
+  }
+  const table = (req.query.table || '').replace(/[^a-z_]/gi, '');
+  if (!table) return res.status(400).json({ error: 'table parameter required' });
+  try {
+    const result = await query(`
+      SELECT column_name, data_type, is_nullable, column_default
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = $1
+      ORDER BY ordinal_position
+    `, [table]);
+    res.json({ table, columns: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 /* ---------- DB INFO ---------- */
 app.get('/api/admin/db-info', async (req, res) => {
   if (!process.env.MIGRATION_SECRET) {
