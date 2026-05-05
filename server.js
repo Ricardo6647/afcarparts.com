@@ -1,6 +1,7 @@
 // file: server.js
 // AFRICARPARTS - Backend API + Frontend
 // Status: categories, shops, products laufen auf Postgres (mehrsprachig)
+// Auth: bcrypt + JWT (Etappe 3.4)
 
 const express = require('express');
 const cors = require('cors');
@@ -11,6 +12,11 @@ const fs = require('fs');
 const { load, save } = require('./store');
 const { query } = require('./db');
 const db = require('./storeDb');
+
+// === PATCH 1: Auth-Imports ===
+const cookieParser = require('cookie-parser');
+const userDb = require('./userDb');
+const { signAccessToken, verifyAccessToken } = require('./auth');
 
 const app = express();
 
@@ -38,6 +44,9 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept-Language', 'x-migration-secret']
 }));
 
+// === PATCH 1: Cookie-Parser ===
+app.use(cookieParser());
+
 /* ---------- BODY PARSER ---------- */
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -59,19 +68,25 @@ app.use(express.static(publicDir, {
 }));
 console.log('Frontend wird ausgeliefert aus:', publicDir);
 
-/* ---------- ADMIN MIDDLEWARE ---------- */
-function requireAdmin(req, res, next) {
-  const tokenHeader = (req.headers.authorization || "").trim();
-  if (!tokenHeader || !tokenHeader.startsWith("token-")) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  const userId = tokenHeader.replace("token-", "").trim();
-  const users = load("users") || [];
-  const user = users.find(u => String(u.id) === String(userId));
-  if (!user) return res.status(401).json({ error: "Invalid token" });
-  if (user.role !== "admin") return res.status(403).json({ error: "Admin only" });
-  req.user = user;
+/* ---------- AUTH MIDDLEWARE (JWT-basiert, Etappe 3.4) ---------- */
+function requireAuth(req, res, next) {
+  const header = (req.headers.authorization || '').trim();
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  const payload = verifyAccessToken(token);
+  if (!payload) return res.status(401).json({ error: 'Invalid or expired token' });
+  req.user = { id: payload.sub, email: payload.email, role: payload.role, name: payload.name };
   next();
+}
+
+function requireAdmin(req, res, next) {
+  requireAuth(req, res, (err) => {
+    if (err) return next(err);
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin only' });
+    }
+    next();
+  });
 }
 
 /* ---------- LANG HELPER ---------- */
@@ -214,39 +229,121 @@ app.get('/api/admin/db-info', async (req, res) => {
   }
 });
 
-/* ---------- AUTH (noch JSON) ---------- */
-app.post('/api/auth/register', (req, res) => {
-  const { name, email, password, role, phone, country } = req.body || {};
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Missing email or password' });
+/* ============================================================
+   AUTH (Postgres + bcrypt + JWT) - Etappe 3.4
+   ============================================================ */
+
+const setRefreshCookie = (res, token) => {
+  res.cookie('refreshToken', token, {
+    httpOnly: true, secure: true, sameSite: 'none',
+    maxAge: 30 * 24 * 60 * 60 * 1000,
+    domain: '.afcarparts.com',
+  });
+};
+const clearRefreshCookie = (res) => {
+  res.clearCookie('refreshToken', {
+    httpOnly: true, secure: true, sameSite: 'none', domain: '.afcarparts.com',
+  });
+};
+
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const user = await userDb.registerUser(req.body || {});
+    const accessToken = signAccessToken(user);
+    const refreshToken = await userDb.createRefreshToken(user.id, {
+      userAgent: req.headers['user-agent'], ip: req.ip,
+    });
+    setRefreshCookie(res, refreshToken);
+    res.json({ user, accessToken, token: accessToken });
+  } catch (err) {
+    const map = { email_password_required: 400, password_too_short: 400,
+                  invalid_role: 400, email_already_exists: 409 };
+    res.status(map[err.message] || 500).json({ error: err.message });
   }
-  const users = load('users');
-  if (users.find(u => u.email === email)) {
-    return res.status(400).json({ error: 'User already exists' });
-  }
-  const user = {
-    id: Date.now().toString(),
-    name, email, password,
-    role: role || 'buyer',
-    phone, country,
-    created_at: new Date().toISOString()
-  };
-  users.push(user);
-  save('users', users);
-  const { password: _, ...safeUser } = user;
-  return res.json({ user: safeUser, token: 'token-' + user.id });
 });
 
-app.post('/api/auth/login', (req, res) => {
-  const { email, password } = req.body || {};
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Missing email or password' });
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body || {};
+    const user = await userDb.loginUser({ email, password, ip: req.ip });
+    const accessToken = signAccessToken(user);
+    const refreshToken = await userDb.createRefreshToken(user.id, {
+      userAgent: req.headers['user-agent'], ip: req.ip,
+    });
+    setRefreshCookie(res, refreshToken);
+    res.json({ user, accessToken, token: accessToken });
+  } catch (err) {
+    const map = { email_password_required: 400, invalid_credentials: 401, account_locked: 423 };
+    res.status(map[err.message] || 500).json({ error: err.message });
   }
-  const users = load('users');
-  const user = users.find(u => u.email === email && u.password === password);
-  if (!user) return res.status(400).json({ error: 'Invalid credentials' });
-  const { password: _, ...safeUser } = user;
-  return res.json({ user: safeUser, token: 'token-' + user.id });
+});
+
+app.post('/api/auth/refresh', async (req, res) => {
+  const result = await userDb.validateRefreshToken(req.cookies?.refreshToken);
+  if (!result) return res.status(401).json({ error: 'invalid_refresh_token' });
+  const accessToken = signAccessToken({
+    id: result.user_id, email: result.email, role: result.role, name: result.name,
+  });
+  res.json({ accessToken, token: accessToken });
+});
+
+app.post('/api/auth/logout', async (req, res) => {
+  await userDb.revokeRefreshToken(req.cookies?.refreshToken);
+  clearRefreshCookie(res);
+  res.json({ ok: true });
+});
+
+app.get('/api/auth/me', requireAuth, async (req, res) => {
+  const user = await userDb.getUserById(req.user.id);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  res.json({ user });
+});
+
+app.post('/api/auth/change-password', requireAuth, async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body || {};
+    await userDb.changePassword(req.user.id, oldPassword, newPassword);
+    clearRefreshCookie(res);
+    res.json({ ok: true });
+  } catch (err) {
+    const map = { password_too_short: 400, invalid_credentials: 401, user_not_found: 404 };
+    res.status(map[err.message] || 500).json({ error: err.message });
+  }
+});
+
+app.post('/api/auth/request-password-reset', async (req, res) => {
+  const token = await userDb.requestPasswordReset(req.body?.email);
+  if (token) console.log('[PASSWORD_RESET]', req.body?.email, '→', token);
+  res.json({ ok: true });
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body || {};
+    await userDb.resetPassword(token, newPassword);
+    res.json({ ok: true });
+  } catch (err) {
+    const map = { password_too_short: 400, invalid_or_expired_token: 400 };
+    res.status(map[err.message] || 500).json({ error: err.message });
+  }
+});
+
+/* ---------- TEMPORÄRER ENDPOINT für JSON→Postgres-Migration ---------- */
+/* WICHTIG: Nach erfolgreicher Migration diesen Block wieder entfernen! */
+app.post('/api/admin/migrate-users', async (req, res) => {
+  if (!process.env.MIGRATION_SECRET) {
+    return res.status(503).json({ error: 'MIGRATION_SECRET not set' });
+  }
+  if (req.headers['x-migration-secret'] !== process.env.MIGRATION_SECRET) {
+    return res.status(401).json({ error: 'Invalid secret' });
+  }
+  try {
+    const { migrateUsers } = require('./scripts/migrate_users_to_postgres');
+    const result = await migrateUsers();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 /* ============================================================
@@ -621,7 +718,6 @@ app.delete('/api/admin/shops/:id', requireAdmin, async (req, res) => {
 
 /**
  * Public: Produkte suchen/filtern in der gewuenschten Sprache.
- * Aufruf: GET /api/products?lang=de&q=brake&category_id=1&brand=BMW&min_price=10&max_price=100&condition=new&china_only=1&tags=keramik,vorne&sort=newest&page=1&limit=24
  */
 app.get('/api/products', async (req, res) => {
   try {
@@ -637,7 +733,6 @@ app.get('/api/products', async (req, res) => {
     const params = [lang];
     let i = 2;
 
-    // Filter
     if (category_id) { conditions.push(`p.category_id = $${i++}`); params.push(parseInt(category_id, 10)); }
     if (shop_id) { conditions.push(`p.shop_id = $${i++}`); params.push(parseInt(shop_id, 10)); }
     if (condition) { conditions.push(`p.condition = $${i++}`); params.push(condition); }
@@ -648,7 +743,6 @@ app.get('/api/products', async (req, res) => {
     if (max_price) { conditions.push(`p.price_usd <= $${i++}`); params.push(parseFloat(max_price)); }
     if (china_only === '1') conditions.push(`p.is_china_seller = TRUE`);
 
-    // Tag-Filter (Produkt muss alle angegebenen Tags haben)
     if (tags) {
       const tagSlugs = String(tags).split(',').map(t => makeSlug(t)).filter(Boolean);
       if (tagSlugs.length > 0) {
@@ -664,7 +758,6 @@ app.get('/api/products', async (req, res) => {
       }
     }
 
-    // Volltext-Suche im Title/Description (in der aktuellen Sprache + Fallback)
     if (q && q.trim()) {
       conditions.push(`p.id IN (
         SELECT pt.product_id FROM product_translations pt
@@ -676,17 +769,14 @@ app.get('/api/products', async (req, res) => {
 
     const where = 'WHERE ' + conditions.join(' AND ');
 
-    // Sortierung
     let orderBy = 'p.created_at DESC';
     if (sort === 'price_asc') orderBy = 'p.price_usd ASC';
     else if (sort === 'price_desc') orderBy = 'p.price_usd DESC';
     else if (sort === 'popular') orderBy = 'p.view_count DESC, p.created_at DESC';
 
-    // Total count
     const countRes = await query(`SELECT COUNT(*) AS c FROM products p ${where}`, params.slice(1));
     const total = parseInt(countRes.rows[0].c, 10);
 
-    // Pagination
     const pg = Math.max(1, parseInt(page, 10) || 1);
     const lim = Math.min(100, Math.max(1, parseInt(limit, 10) || 24));
     const offset = (pg - 1) * lim;
@@ -720,10 +810,6 @@ app.get('/api/products', async (req, res) => {
   }
 });
 
-/**
- * Public: einzelnes Produkt mit allen Details.
- * Erhoeht view_count automatisch.
- */
 app.get('/api/products/:id', async (req, res) => {
   try {
     const lang = getLang(req);
@@ -752,7 +838,6 @@ app.get('/api/products/:id', async (req, res) => {
 
     const product = result.rows[0];
 
-    // Tags holen
     const tagsRes = await query(`
       SELECT t.id, t.slug FROM tags t
       JOIN product_tags pt ON pt.tag_id = t.id
@@ -761,7 +846,6 @@ app.get('/api/products/:id', async (req, res) => {
     `, [id]);
     product.tags = tagsRes.rows;
 
-    // view_count erhoehen (fire-and-forget)
     query('UPDATE products SET view_count = view_count + 1 WHERE id = $1', [id]).catch(() => {});
 
     res.json(product);
@@ -771,9 +855,6 @@ app.get('/api/products/:id', async (req, res) => {
   }
 });
 
-/**
- * Admin/Seller: alle Produkte im Admin-Format.
- */
 app.get('/api/admin/products', requireAdmin, async (req, res) => {
   try {
     const products = await query(`SELECT * FROM products ORDER BY created_at DESC`);
@@ -793,20 +874,6 @@ app.get('/api/admin/products', requireAdmin, async (req, res) => {
   }
 });
 
-/**
- * Admin/Seller: neues Produkt anlegen.
- * Pflicht: default_lang + translations[default_lang].title + price_usd
- * Body: {
- *   default_lang: 'de',
- *   translations: { de: { title: 'Bremsbelag', description: '...' } },
- *   price_usd: 49.99,
- *   brand: 'Bosch', model: 'F10', oem: '34116794917',
- *   category_id: 1, shop_id: 5, seller_id: 12,
- *   condition: 'new', stock: 100, is_china_seller: false,
- *   images: ['https://...', 'https://...'],
- *   tags: ['bremsbelag', 'vorne', 'keramik']
- * }
- */
 app.post('/api/admin/products', requireAdmin, async (req, res) => {
   const {
     default_lang, translations, price_usd, brand, model, oem,
@@ -814,7 +881,6 @@ app.post('/api/admin/products', requireAdmin, async (req, res) => {
     images, tags
   } = req.body || {};
 
-  // Validierung
   if (!default_lang || !SUPPORTED_LANGS.includes(default_lang)) {
     return res.status(400).json({ error: 'default_lang must be one of: ' + SUPPORTED_LANGS.join(', ') });
   }
@@ -829,7 +895,6 @@ app.post('/api/admin/products', requireAdmin, async (req, res) => {
   }
 
   try {
-    // Produkt anlegen
     const newProd = await db.insert('products', {
       default_lang,
       price_usd: parseFloat(price_usd),
@@ -846,7 +911,6 @@ app.post('/api/admin/products', requireAdmin, async (req, res) => {
       active: true
     });
 
-    // Uebersetzungen einfuegen
     for (const lang of SUPPORTED_LANGS) {
       const tr = translations[lang];
       if (tr && tr.title && tr.title.trim()) {
@@ -859,7 +923,6 @@ app.post('/api/admin/products', requireAdmin, async (req, res) => {
       }
     }
 
-    // Tags verknuepfen
     if (Array.isArray(tags) && tags.length > 0) {
       const tagIds = await resolveTags(tags);
       for (const tagId of tagIds) {
@@ -877,9 +940,6 @@ app.post('/api/admin/products', requireAdmin, async (req, res) => {
   }
 });
 
-/**
- * Admin/Seller: Produkt aktualisieren.
- */
 app.put('/api/admin/products/:id', requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!id) return res.status(400).json({ error: 'Invalid product id' });
@@ -910,7 +970,6 @@ app.put('/api/admin/products/:id', requireAdmin, async (req, res) => {
 
     if (Object.keys(updates).length > 0) await db.update('products', id, updates);
 
-    // Uebersetzungen
     if (translations && typeof translations === 'object') {
       for (const lang of SUPPORTED_LANGS) {
         const tr = translations[lang];
@@ -929,7 +988,6 @@ app.put('/api/admin/products/:id', requireAdmin, async (req, res) => {
       }
     }
 
-    // Tags neu verknuepfen (alte loeschen, neue setzen)
     if (Array.isArray(tags)) {
       await query('DELETE FROM product_tags WHERE product_id = $1', [id]);
       if (tags.length > 0) {
@@ -998,15 +1056,21 @@ app.post('/api/orders', (req, res) => {
 });
 
 /* ============================================================
-   ADMIN ROUTES (Rest noch JSON)
+   ADMIN ROUTES (Rest)
    ============================================================ */
 
-app.get('/api/admin/users', requireAdmin, (req, res) => {
-  const users = (load('users') || []).map(u => {
-    const { password, ...safe } = u;
-    return safe;
-  });
-  res.json({ data: users });
+// === PATCH 4: Users aus Postgres lesen ===
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT id, email, name, role, whatsapp, email_verified,
+             last_login_at, created_at
+      FROM users ORDER BY created_at DESC
+    `);
+    res.json({ data: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get('/api/admin/banners', requireAdmin, (req, res) => {
