@@ -1,5 +1,6 @@
 // scripts/migrate_users_to_postgres.js
 // One-Time-Migration: data/users.json → Postgres users (mit bcrypt)
+// Verwendet 'phone' Spalte (wie in der echten Tabelle)
 
 const fs = require('fs');
 const path = require('path');
@@ -39,6 +40,7 @@ async function migrateUsers() {
   for (const u of users) {
     if (!u.email || !u.password) {
       skipped++;
+      errors.push(`(unbekannte email): email oder password fehlt im JSON`);
       continue;
     }
 
@@ -46,15 +48,16 @@ async function migrateUsers() {
     const role = ROLE_MAP[u.role] || 'customer';
     const passwordHash = await bcrypt.hash(String(u.password), 12);
     const name = u.name || null;
-    const whatsapp = u.phone || u.whatsapp || null;
+    const phone = u.phone || u.whatsapp || null;
+    const country = u.country || null;
 
     try {
       const result = await query(`
-        INSERT INTO users (email, password_hash, name, role, whatsapp, email_verified)
-        VALUES ($1, $2, $3, $4, $5, FALSE)
+        INSERT INTO users (email, password_hash, name, role, phone, country, email_verified)
+        VALUES ($1, $2, $3, $4, $5, $6, FALSE)
         ON CONFLICT (LOWER(email)) DO NOTHING
         RETURNING id
-      `, [email, passwordHash, name, role, whatsapp]);
+      `, [email, passwordHash, name, role, phone, country]);
 
       if (result.rows.length > 0) {
         migrated++;
