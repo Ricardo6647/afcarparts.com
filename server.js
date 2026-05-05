@@ -1082,7 +1082,7 @@ app.post('/api/orders', (req, res) => {
 app.get('/api/admin/users', requireAdmin, async (req, res) => {
   try {
     const result = await query(`
-      SELECT id, email, name, role, whatsapp, email_verified,
+      SELECT id, email, name, role, phone, country, email_verified,
              last_login_at, created_at
       FROM users ORDER BY created_at DESC
     `);
