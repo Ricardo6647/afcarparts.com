@@ -500,7 +500,10 @@
   <main>
     <div class="section-header">
       <h2>Meine Produkte</h2>
-      <button class="btn btn-primary" id="new-product-btn">+ Neues Produkt</button>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-secondary" id="csv-import-btn">📥 CSV-Import</button>
+        <button class="btn btn-primary" id="new-product-btn">+ Neues Produkt</button>
+      </div>
     </div>
     
     <div class="products-card">
@@ -509,6 +512,60 @@
       </div>
     </div>
   </main>
+</div>
+
+<!-- ============================================================
+     CSV IMPORT MODAL
+     ============================================================ -->
+<div id="csv-modal" class="modal-backdrop hidden">
+  <div class="modal" style="max-width: 560px;">
+    <div class="modal-header">
+      <h3>CSV-Import</h3>
+      <button class="modal-close" id="csv-modal-close-btn">×</button>
+    </div>
+    
+    <div class="modal-body">
+      <div id="csv-error" class="alert alert-error hidden"></div>
+      <div id="csv-success" class="alert alert-success hidden"></div>
+      
+      <p style="margin-bottom: 12px; font-size: 14px; color: var(--text-muted);">
+        Lade eine CSV-Datei hoch, um mehrere Produkte gleichzeitig anzulegen.
+      </p>
+      
+      <details style="margin-bottom: 16px; font-size: 13px;">
+        <summary style="cursor:pointer; color: var(--primary); font-weight: 500;">
+          ℹ️ CSV-Format anzeigen
+        </summary>
+        <div style="background: var(--bg); padding: 12px; border-radius: 6px; margin-top: 8px; font-family: monospace; font-size: 12px; overflow-x: auto;">
+          <strong>Pflicht:</strong> title, price_usd<br>
+          <strong>Optional:</strong> description, brand, model, oem, condition, stock, category_slug, tags, lang<br><br>
+          <strong>Beispiel (1. Zeile = Header):</strong><br>
+          <code style="display:block; white-space:pre; margin-top: 4px;">title,price_usd,brand,model,oem,stock,condition,tags
+Bremsbelag VW Golf 7,49.99,Bosch,Golf 7,8V0698151D,10,new,"bremsbelag,vorne"
+Stoßdämpfer BMW E46,89.50,Sachs,E46,33526764749,5,new,</code>
+          <br>
+          <strong>Hinweise:</strong>
+          <ul style="margin: 4px 0 0 20px;">
+            <li><code>condition</code>: <code>new</code>, <code>used</code> oder <code>refurbished</code></li>
+            <li><code>lang</code>: <code>de</code>, <code>en</code>, <code>fr</code>, <code>pt</code>, <code>ar</code> (default: de)</li>
+            <li><code>tags</code>: kommagetrennt, in Anführungszeichen wenn Komma im Wert</li>
+            <li>Trennzeichen: Komma, Semikolon oder Tab — automatisch erkannt</li>
+            <li><strong>Bilder gehen NICHT per CSV</strong> — die fügst du nach dem Import einzeln pro Produkt hinzu</li>
+          </ul>
+        </div>
+      </details>
+      
+      <div class="form-group">
+        <label for="csv-file">CSV-Datei auswählen</label>
+        <input type="file" id="csv-file" accept=".csv,.txt,text/csv">
+      </div>
+    </div>
+    
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" id="csv-cancel-btn">Abbrechen</button>
+      <button type="button" class="btn btn-primary" id="csv-upload-btn">Hochladen & importieren</button>
+    </div>
+  </div>
 </div>
 
 <!-- ============================================================
@@ -829,11 +886,21 @@ function renderProducts() {
 
 function parseImages(images) {
   if (!images) return [];
-  if (Array.isArray(images)) return images;
-  try {
-    const parsed = JSON.parse(images);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
+  let arr = images;
+  if (typeof images === 'string') {
+    try {
+      arr = JSON.parse(images);
+      if (!Array.isArray(arr)) return [];
+    } catch { return []; }
+  }
+  if (!Array.isArray(arr)) return [];
+  // Legacy: relative URLs auf absolute umstellen, damit alte Produkte auch korrekt anzeigen
+  return arr.map(url => {
+    if (!url) return url;
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    if (url.startsWith('/')) return API + url;
+    return url;
+  });
 }
 
 function escape(s) {
@@ -1090,6 +1157,75 @@ document.getElementById('product-form').addEventListener('submit', async (e) => 
   } finally {
     saveBtn.disabled = false;
     saveBtn.textContent = 'Speichern';
+  }
+});
+
+// ============================================================
+// CSV IMPORT
+// ============================================================
+
+document.getElementById('csv-import-btn').addEventListener('click', () => {
+  document.getElementById('csv-error').classList.add('hidden');
+  document.getElementById('csv-success').classList.add('hidden');
+  document.getElementById('csv-file').value = '';
+  document.getElementById('csv-modal').classList.remove('hidden');
+});
+
+document.getElementById('csv-cancel-btn').addEventListener('click', closeCsvModal);
+document.getElementById('csv-modal-close-btn').addEventListener('click', closeCsvModal);
+document.getElementById('csv-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'csv-modal') closeCsvModal();
+});
+
+function closeCsvModal() {
+  document.getElementById('csv-modal').classList.add('hidden');
+}
+
+document.getElementById('csv-upload-btn').addEventListener('click', async () => {
+  const fileInput = document.getElementById('csv-file');
+  const errorEl = document.getElementById('csv-error');
+  const successEl = document.getElementById('csv-success');
+  const uploadBtn = document.getElementById('csv-upload-btn');
+  errorEl.classList.add('hidden');
+  successEl.classList.add('hidden');
+  
+  const file = fileInput.files[0];
+  if (!file) {
+    errorEl.textContent = 'Bitte eine CSV-Datei auswählen';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+  
+  if (file.size > 5 * 1024 * 1024) {
+    errorEl.textContent = 'Datei ist größer als 5 MB';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+  
+  uploadBtn.disabled = true;
+  uploadBtn.textContent = 'Importiere…';
+  
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const data = await api('/api/seller/csv-import', { method: 'POST', body: fd });
+    
+    let msg = `✅ ${data.imported} Produkt(e) importiert`;
+    if (data.skipped > 0) msg += `, ${data.skipped} übersprungen`;
+    if (data.errors && data.errors.length > 0) {
+      msg += '\n\nFehler:\n' + data.errors.slice(0, 5).map(e => '• ' + e).join('\n');
+    }
+    successEl.textContent = msg;
+    successEl.style.whiteSpace = 'pre-wrap';
+    successEl.classList.remove('hidden');
+    
+    await loadProducts();
+  } catch (err) {
+    errorEl.textContent = 'Fehler: ' + err.message;
+    errorEl.classList.remove('hidden');
+  } finally {
+    uploadBtn.disabled = false;
+    uploadBtn.textContent = 'Hochladen & importieren';
   }
 });
 
