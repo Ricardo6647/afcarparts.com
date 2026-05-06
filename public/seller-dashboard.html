@@ -61,6 +61,34 @@
       font-size: 14px;
     }
     
+    /* TABS */
+    .tabs {
+      display: flex;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+      gap: 4px;
+    }
+    .tab {
+      flex: 1;
+      padding: 10px 0;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      transition: all .15s;
+      font-family: inherit;
+    }
+    .tab.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+    .tab:hover:not(.active) {
+      color: var(--text);
+    }
+    
     /* ===== FORMS ===== */
     .form-group {
       margin-bottom: 16px;
@@ -457,13 +485,19 @@
 <body>
 
 <!-- ============================================================
-     LOGIN SCREEN
+     LOGIN / REGISTER SCREEN
      ============================================================ -->
 <div id="login-screen">
   <div class="login-card">
-    <h1>Händler-Login</h1>
-    <p class="subtitle">Melde dich an, um deine Produkte zu verwalten.</p>
+    <h1>Händler-Bereich</h1>
+    <p class="subtitle">Melde dich an oder registriere dich als Händler.</p>
     
+    <div class="tabs">
+      <button type="button" class="tab active" data-tab="login">Anmelden</button>
+      <button type="button" class="tab" data-tab="register">Registrieren</button>
+    </div>
+    
+    <!-- LOGIN -->
     <form id="login-form">
       <div class="form-group">
         <label for="login-email">E-Mail</label>
@@ -480,6 +514,46 @@
       <button type="submit" class="btn btn-primary btn-block" id="login-submit">
         Einloggen
       </button>
+    </form>
+    
+    <!-- REGISTER (initially hidden) -->
+    <form id="register-form" class="hidden">
+      <div class="form-group">
+        <label for="reg-name">Name oder Firma *</label>
+        <input type="text" id="reg-name" required maxlength="100" autocomplete="name">
+      </div>
+      
+      <div class="form-group">
+        <label for="reg-email">E-Mail *</label>
+        <input type="email" id="reg-email" required autocomplete="email">
+      </div>
+      
+      <div class="form-group">
+        <label for="reg-password">Passwort *</label>
+        <input type="password" id="reg-password" required minlength="8" autocomplete="new-password">
+        <div class="hint">Mindestens 8 Zeichen.</div>
+      </div>
+      
+      <div class="form-row">
+        <div class="form-group">
+          <label for="reg-phone">WhatsApp / Telefon</label>
+          <input type="text" id="reg-phone" maxlength="50" placeholder="+233 ..." autocomplete="tel">
+        </div>
+        <div class="form-group">
+          <label for="reg-country">Land</label>
+          <input type="text" id="reg-country" maxlength="50" placeholder="z.B. Ghana">
+        </div>
+      </div>
+      
+      <div id="register-error" class="alert alert-error hidden"></div>
+      
+      <button type="submit" class="btn btn-primary btn-block" id="register-submit">
+        Als Händler registrieren
+      </button>
+      
+      <p style="font-size: 12px; color: var(--text-muted); margin-top: 12px; text-align: center;">
+        Mit der Registrierung wirst du als Händler freigeschaltet und kannst sofort Produkte einstellen.
+      </p>
     </form>
   </div>
 </div>
@@ -771,6 +845,63 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
     submit.textContent = 'Einloggen';
   }
 });
+
+// Tab-Switch (Login / Register)
+document.querySelectorAll('.tab').forEach(tabBtn => {
+  tabBtn.addEventListener('click', () => {
+    const target = tabBtn.dataset.tab;
+    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === tabBtn));
+    document.getElementById('login-form').classList.toggle('hidden', target !== 'login');
+    document.getElementById('register-form').classList.toggle('hidden', target !== 'register');
+    document.getElementById('login-error').classList.add('hidden');
+    document.getElementById('register-error').classList.add('hidden');
+  });
+});
+
+// Register-Form (immer als Händler)
+document.getElementById('register-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const submit = document.getElementById('register-submit');
+  const errorEl = document.getElementById('register-error');
+  errorEl.classList.add('hidden');
+  submit.disabled = true;
+  submit.textContent = 'Registriere…';
+  
+  try {
+    const data = await api('/api/auth/register', {
+      method: 'POST',
+      body: {
+        name: document.getElementById('reg-name').value.trim(),
+        email: document.getElementById('reg-email').value.trim(),
+        password: document.getElementById('reg-password').value,
+        phone: document.getElementById('reg-phone').value.trim() || null,
+        country: document.getElementById('reg-country').value.trim() || null,
+        role: 'dealer',  // ← hartkodiert: Registrierung über dieses Dashboard = immer Händler
+      },
+    });
+    
+    state.jwt = data.accessToken;
+    state.user = data.user;
+    localStorage.setItem('jwt', state.jwt);
+    localStorage.setItem('user', JSON.stringify(state.user));
+    showDashboard();
+  } catch (err) {
+    let msg = err.message;
+    if (msg === 'email_already_exists') msg = 'Diese E-Mail ist bereits registriert. Bitte einloggen.';
+    if (msg === 'password_too_short') msg = 'Passwort muss mindestens 8 Zeichen lang sein.';
+    if (msg === 'email_password_required') msg = 'E-Mail und Passwort sind Pflicht.';
+    errorEl.textContent = msg;
+    errorEl.classList.remove('hidden');
+  } finally {
+    submit.disabled = false;
+    submit.textContent = 'Als Händler registrieren';
+  }
+});
+
+// URL-Parameter: ?tab=register öffnet direkt Register-Tab
+if (new URLSearchParams(window.location.search).get('tab') === 'register') {
+  document.querySelector('.tab[data-tab="register"]')?.click();
+}
 
 document.getElementById('logout-btn').addEventListener('click', logout);
 
