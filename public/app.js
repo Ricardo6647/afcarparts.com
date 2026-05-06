@@ -1005,7 +1005,7 @@ function buildFooter() {
   h += '<span class="footer-link" onclick="render(\'products\')">' + t('footer.browse') + '</span>';
   h += '<span class="footer-link" onclick="render(\'shops\')">' + t('nav.shops') + '</span>';
   h += '<span class="footer-link" onclick="render(\'products\',{china_only:\'1\'})">' + t('footer.china_w') + '</span>';
-  h += '<span class="footer-link" onclick="goSell()">' + t('footer.sell') + '</span></div>';
+ h += '<a class="footer-link" href="/seller-dashboard.html?tab=register" style="cursor:pointer">' + t('footer.sell') + '</a></div>';
 
   h += '<div><h4 class="footer-col">' + t('footer.support') + '</h4>';
   h += '<span class="footer-link">' + t('footer.help') + '</span>';
@@ -1020,6 +1020,7 @@ function buildFooter() {
 
   h += '<div class="footer-bot">';
   h += '<span>(c) ' + new Date().getFullYear() + ' AFRICARPARTS - ' + t('footer.rights') + '</span>';
+  h += '<span><a href="/seller-dashboard.html" style="color:inherit;text-decoration:none;opacity:0.7">🛍️ Händler-Login</a></span>';
   h += '<span>' + t('footer.countries') + '</span></div>';
 
   $('footer').innerHTML = h;
