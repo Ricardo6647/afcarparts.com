@@ -27,7 +27,6 @@ const HOST = '0.0.0.0';
 const allowedOrigins = [
   'https://afcarparts.com',
   'https://www.afcarparts.com',
-  'https://afcarparts-com.onrender.com',
   'http://localhost:3000',
   'http://localhost:5000',
   'http://127.0.0.1:5500'
@@ -843,7 +842,9 @@ app.post('/api/upload/images', requireAuth, (req, res) => {
       return res.status(400).json({ error: err.message });
     }
     if (!req.files || req.files.length === 0) return res.status(400).json({ error: 'Keine Datei erhalten' });
-    const urls = req.files.map(f => '/uploads/' + f.filename);
+    // Absolute URL zurückgeben, damit Bilder von Hostinger (afcarparts.com) UND Render aus geladen werden können
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const urls = req.files.map(f => baseUrl + '/uploads/' + f.filename);
     res.json({ urls });
   });
 });
@@ -1019,8 +1020,129 @@ app.delete('/api/seller/products/:id', requireAuth, async (req, res) => {
   }
 });
 
-app.post('/api/seller/csv-import', requireAuth, upload.single('file'), (req, res) => {
-  res.json({ success: true, message: 'CSV-Parser kommt in Etappe 4.7' });
+// CSV-Import: einfaches Format, ein Produkt pro Zeile
+// Pflicht: title, price_usd
+// Optional: description, brand, model, oem, condition, stock, category_slug, tags, lang
+function parseCsvRow(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQuotes) {
+      if (c === '"' && line[i+1] === '"') { current += '"'; i++; }
+      else if (c === '"') inQuotes = false;
+      else current += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ',' || c === ';' || c === '\t') { result.push(current); current = ''; }
+      else current += c;
+    }
+  }
+  result.push(current);
+  return result.map(s => s.trim());
+}
+
+app.post('/api/seller/csv-import', requireAuth, upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Keine Datei hochgeladen' });
+
+  let content;
+  try {
+    content = fs.readFileSync(req.file.path, 'utf8');
+  } catch (err) {
+    return res.status(500).json({ error: 'Datei konnte nicht gelesen werden' });
+  } finally {
+    try { fs.unlinkSync(req.file.path); } catch {}
+  }
+
+  // BOM entfernen falls vorhanden
+  if (content.charCodeAt(0) === 0xFEFF) content = content.slice(1);
+
+  const lines = content.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return res.status(400).json({ error: 'CSV ist leer oder enthält nur Header' });
+
+  const headers = parseCsvRow(lines[0]).map(h => h.toLowerCase());
+
+  if (!headers.includes('title')) return res.status(400).json({ error: 'Spalte "title" fehlt im Header' });
+  if (!headers.includes('price_usd')) return res.status(400).json({ error: 'Spalte "price_usd" fehlt im Header' });
+
+  // Kategorien einmal laden für Slug→ID-Lookup
+  const catRes = await query('SELECT id, slug FROM categories');
+  const categoryBySlug = {};
+  for (const c of catRes.rows) categoryBySlug[c.slug] = c.id;
+
+  let imported = 0, skipped = 0;
+  const errors = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    try {
+      const row = parseCsvRow(lines[i]);
+      const data = {};
+      for (let j = 0; j < headers.length; j++) data[headers[j]] = row[j] || '';
+
+      if (!data.title || !data.price_usd) {
+        skipped++;
+        errors.push(`Zeile ${i+1}: Titel oder Preis fehlt`);
+        continue;
+      }
+
+      const price = parseFloat(data.price_usd);
+      if (isNaN(price) || price < 0) {
+        skipped++;
+        errors.push(`Zeile ${i+1}: Preis ungültig (${data.price_usd})`);
+        continue;
+      }
+
+      const default_lang = SUPPORTED_LANGS.includes(data.lang) ? data.lang : 'de';
+      const condition = ['new', 'used', 'refurbished'].includes(data.condition) ? data.condition : 'new';
+      const category_id = data.category_slug ? (categoryBySlug[data.category_slug] || null) : null;
+
+      const newProd = await db.insert('products', {
+        default_lang,
+        price_usd: price,
+        brand: data.brand || null,
+        model: data.model || null,
+        oem: data.oem || null,
+        condition,
+        category_id,
+        seller_id: req.user.id,
+        stock: parseInt(data.stock, 10) || 0,
+        is_china_seller: false,
+        images: '[]',
+        active: true
+      });
+
+      await db.insert('product_translations', {
+        product_id: newProd.id,
+        lang: default_lang,
+        title: data.title,
+        description: data.description || null
+      });
+
+      if (data.tags) {
+        const tagSlugs = data.tags.split(/[,;]/).map(t => makeSlug(t)).filter(Boolean);
+        if (tagSlugs.length > 0) {
+          const tagIds = await resolveTags(tagSlugs);
+          for (const tid of tagIds) {
+            await query('INSERT INTO product_tags (product_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [newProd.id, tid]);
+          }
+        }
+      }
+
+      imported++;
+    } catch (err) {
+      skipped++;
+      errors.push(`Zeile ${i+1}: ${err.message}`);
+    }
+  }
+
+  res.json({
+    ok: true,
+    total: lines.length - 1,
+    imported,
+    skipped,
+    errors: errors.slice(0, 20)
+  });
 });
 
 /* ---------- BANNERS + ORDERS (noch JSON) ---------- */
