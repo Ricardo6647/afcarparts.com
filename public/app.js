@@ -1048,11 +1048,11 @@ function adBanners() {
       '<div><h3 style="color:var(--a500)">' + t('home.china_title') + '</h3>' +
       '<p>' + t('home.china_sub') + '</p></div>' +
       '<button class="ad-cta or">Browse &gt;</button></div>' +
-    '<div class="ad-card bl" onclick="goSell()">' +
+    '<a class="ad-card bl" href="/seller-dashboard.html?tab=register" style="text-decoration:none">' +
       '<div class="ad-card-tag">AD</div>' +
       '<div><h3 style="color:var(--p700)">' + t('footer.sell') + '</h3>' +
       '<p>List parts free - Reach buyers across Africa</p></div>' +
-      '<button class="ad-cta bl">Start &gt;</button></div>' +
+      '<span class="ad-cta bl">Start &gt;</span></a>' +
     '<div class="ad-card gn" onclick="render(\'products\',{condition:\'new\'})">' +
       '<div class="ad-card-tag">AD</div>' +
       '<div><h3 style="color:var(--green)">New OEM Parts</h3>' +
