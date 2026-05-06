@@ -12,11 +12,31 @@ const normalizeEmail = (e) => String(e || '').trim().toLowerCase();
 const generateToken = () => crypto.randomBytes(32).toString('hex');
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
+// Aliase: erlaubt verschiedene Schreibweisen aus unterschiedlichen Frontend-Versionen
+const ROLE_ALIASES = {
+  // Kunde / Käufer
+  'customer': 'customer',
+  'buyer': 'customer',
+  'kunde': 'customer',
+  'kaeufer': 'customer',
+  'käufer': 'customer',
+  // Händler / Verkäufer
+  'dealer': 'dealer',
+  'seller': 'dealer',
+  'haendler': 'dealer',
+  'händler': 'dealer',
+  'verkaeufer': 'dealer',
+  'verkäufer': 'dealer',
+};
+
 async function registerUser({ email, password, name, role = 'customer', phone = null, whatsapp = null, country = null }) {
   const e = normalizeEmail(email);
   if (!e || !password) throw new Error('email_password_required');
   if (password.length < 8) throw new Error('password_too_short');
-  if (!['customer', 'dealer'].includes(role)) throw new Error('invalid_role');
+
+  // Rolle normalisieren (case-insensitive, mit Aliasen)
+  const normalizedRole = ROLE_ALIASES[String(role || 'customer').toLowerCase().trim()];
+  if (!normalizedRole) throw new Error('invalid_role');
 
   // Backwards-compat: 'whatsapp' aus altem Frontend wird als 'phone' akzeptiert
   const phoneValue = phone || whatsapp || null;
@@ -27,7 +47,7 @@ async function registerUser({ email, password, name, role = 'customer', phone = 
       `INSERT INTO users (email, password_hash, name, role, phone, country)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, email, name, role, phone, country, email_verified, created_at`,
-      [e, hash, name, role, phoneValue, country]
+      [e, hash, name, normalizedRole, phoneValue, country]
     );
     return rows[0];
   } catch (err) {
