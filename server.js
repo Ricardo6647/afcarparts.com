@@ -21,6 +21,9 @@ const { signAccessToken, verifyAccessToken } = require('./auth');
 
 const app = express();
 
+// WICHTIG für Render/Heroku/etc: Trust X-Forwarded-Proto, sonst sind upload URLs http:// statt https:// (Mixed Content!)
+app.set('trust proxy', true);
+
 const PORT = process.env.PORT || 5000;
 const HOST = '0.0.0.0';
 
