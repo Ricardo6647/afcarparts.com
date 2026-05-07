@@ -1695,3 +1695,100 @@ footer {
 @media print {
   nav, footer, .ticker, #topbar, .burger, .nav-mobile { display: none; }
 }
+/* ============================================================
+   PHASE 1 — WEISSER HEADER + HERO BANNER
+   ============================================================ */
+
+:root {
+  /* Hero-Hintergrundbild — du kannst diese URL jederzeit ändern: */
+  --hero-bg: url('https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=1920&q=85');
+}
+
+/* TOPBAR — weiß */
+#topbar {
+  background: #ffffff;
+  color: var(--text2);
+  border-bottom: 1px solid var(--border);
+}
+#topbar a { color: var(--p500); }
+#topbar a:hover { color: var(--p700); }
+
+/* NAVBAR — weiß mit dezenter Schatten-Linie */
+nav#navbar {
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Logo bleibt farbig (Dunkelblau + Orange-Akzent) */
+.nav-brand { color: var(--p700); }
+
+/* Nav-Links — schwarz auf weiß */
+.nav-link { color: var(--text); }
+.nav-link:hover {
+  background: var(--surface2);
+  color: var(--p700);
+}
+.nav-link.active {
+  background: var(--surface3);
+  color: var(--p700);
+}
+
+/* Divider und Selects */
+.nav-divider { background: var(--border); }
+.nav-sel {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.nav-sel:hover, .nav-sel:focus {
+  background: var(--surface2);
+  border-color: var(--p400);
+}
+.nav-sel option {
+  background: #ffffff;
+  color: var(--text);
+}
+
+/* Burger */
+.burger { border-color: var(--border); }
+.burger span { background: var(--text); }
+
+/* HERO — Großes Banner mit Hintergrundbild */
+.hero {
+  background:
+    linear-gradient(rgba(0,0,0,0.50), rgba(0,0,0,0.55)),
+    var(--hero-bg);
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+  min-height: 480px;
+  padding: 5rem 1.5rem;
+  display: flex;
+  align-items: center;
+}
+
+/* alten Gradient-Overlay deaktivieren */
+.hero::after { display: none !important; }
+
+.hero-inner {
+  position: relative;
+  z-index: 1;
+  max-width: 800px;
+}
+
+/* Bessere Lesbarkeit auf Bild */
+.hero h1 { text-shadow: 0 2px 12px rgba(0,0,0,0.45); }
+.hero p {
+  color: rgba(255,255,255,0.94);
+  text-shadow: 0 1px 6px rgba(0,0,0,0.35);
+}
+
+/* Suchleiste prominenter */
+.search-bar {
+  box-shadow: 0 14px 40px rgba(0,0,0,0.30);
+  max-width: 720px;
+}
+
+/* TICKER — Phase 1: ausgeblendet */
+.ticker { display: none !important; }
