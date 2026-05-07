@@ -1160,7 +1160,7 @@ route('home', async function () {
   h += '<div class="hstat"><strong>9</strong><span>' + t('home.stats_langs') + '</span></div>';
   h += '</div></div></section>';
 
-  h += ticker();
+ 
 
   h += '<div class="page-wrap"><section class="section">';
   h += '<div class="sec-hd"><div class="sec-title">' + t('home.categories') + '</div></div>';
@@ -1279,7 +1279,7 @@ route('products', async function (P) {
   if (P.china_only === '1') h += ' <small>- China</small>';
   h += '</div></div>';
 
-  h += ticker();
+ 
 
   h += '<div class="filter-bar" role="search">';
   h += '<div class="fg" style="flex:2;min-width:160px"><label>' + t('filter.search') + '</label>' +
