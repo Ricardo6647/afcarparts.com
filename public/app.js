@@ -838,10 +838,24 @@ window.goSell = goSell;
 const routes = {};
 function route(name, fn) { routes[name] = fn; }
 
-async function render(name, params) {
+async function render(name, params, isPopState) {
   params = params || {};
   S.page = name;
   S.pageParams = params;
+  
+  // Browser-History eintragen (ausser bei Back/Forward-Navigation)
+  if (!isPopState) {
+    const qs = Object.keys(params).length
+      ? '?' + new URLSearchParams(params).toString()
+      : '';
+    const url = '#' + name + qs;
+    if (history.state && history.state.name) {
+      history.pushState({ name: name, params: params }, '', url);
+    } else {
+      history.replaceState({ name: name, params: params }, '', url);
+    }
+  }
+  
   window.scrollTo(0, 0);
   const fn = routes[name];
   $('content').innerHTML = '<div class="loading-wrap"><div class="spinner" role="status"></div></div>';
@@ -1879,7 +1893,30 @@ route('admin-dashboard', async function () {
   $('content').innerHTML = h;
 });
 
-/* ---------- INIT ---------- */
+/* ---------- INIT + SPA ROUTING ---------- */
 setDir(S.lang);
 updateMeta();
-render('home');
+
+// Browser Back/Forward → re-render
+window.addEventListener('popstate', function (e) {
+  if (e.state && e.state.name) {
+    render(e.state.name, e.state.params || {}, true);
+  } else {
+    render('home', {}, true);
+  }
+});
+
+// Beim Laden: aus URL-Hash die richtige Route ermitteln
+function _initRouteFromHash() {
+  const hash = window.location.hash.slice(1);
+  if (!hash) { render('home'); return; }
+  const parts = hash.split('?');
+  const name = parts[0] || 'home';
+  const params = {};
+  if (parts[1]) {
+    new URLSearchParams(parts[1]).forEach(function (v, k) { params[k] = v; });
+  }
+  render(name, params);
+}
+
+_initRouteFromHash();
