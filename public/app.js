@@ -1321,8 +1321,12 @@ route('product-detail', async function (P) {
     const p = await apiReq('/products/' + P.id + '?currency=' + S.currency, 'GET', null, false);
     let imgs = p.images_array || [];
     if (!imgs.length && p.images) {
-      try { imgs = JSON.parse(p.images); } catch (e) { imgs = []; }
+      if (Array.isArray(p.images)) imgs = p.images;
+      else if (typeof p.images === 'string') {
+        try { imgs = JSON.parse(p.images); } catch (e) { imgs = []; }
+      }
     }
+    if (!Array.isArray(imgs)) imgs = [];
     const isCn = p.shop && p.shop.is_china_seller;
     const cond = p.condition || 'new';
 
