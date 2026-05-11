@@ -1892,7 +1892,123 @@ route('admin-dashboard', async function () {
 
   $('content').innerHTML = h;
 });
+/* ---------- ROUTE: ADMIN BANNERS ---------- */
+route('admin-banners', async function () {
+  if (!S.user || S.user.role !== 'admin') { render('login'); return; }
 
+  async function loadList() {
+    let banners = [];
+    try {
+      const res = await apiReq('/admin/banners', 'GET', null, true);
+      banners = res.data || [];
+    } catch (e) {
+      $('banner-list').innerHTML = '<div class="alert alert-error">' + esc(e.message) + '</div>';
+      return;
+    }
+    if (!banners.length) {
+      $('banner-list').innerHTML = '<div class="empty-state"><div class="empty-icon">[-]</div><h3>Noch keine Banner</h3></div>';
+      return;
+    }
+    let h = '<div class="table">';
+    h += '<div class="trow" style="font-weight:700;background:var(--surface2)">';
+    h += '<div>Vorschau</div><div>Titel</div><div>Position</div><div>Status</div><div>Aktionen</div>';
+    h += '</div>';
+    banners.forEach(function (b) {
+      h += '<div class="trow">';
+      h += '<div>' + (b.image_url ? '<img src="' + esc(b.image_url) + '" style="width:80px;height:45px;object-fit:cover;border-radius:4px" onerror="this.style.opacity=.3"/>' : '—') + '</div>';
+      h += '<div>' + esc(b.title || '(ohne Titel)') + '</div>';
+      h += '<div>' + b.position + '</div>';
+      h += '<div>' + (b.active ? '🟢 aktiv' : '⚪ inaktiv') + '</div>';
+      h += '<div style="display:flex;gap:.4rem;flex-wrap:wrap">';
+      h += '<button class="btn btn-ghost btn-sm" onclick="bToggle(\'' + b.id + '\',' + (!b.active) + ')">' + (b.active ? 'Deaktivieren' : 'Aktivieren') + '</button>';
+      h += '<button class="btn btn-ghost btn-sm" onclick="bEdit(\'' + b.id + '\')">Bearbeiten</button>';
+      h += '<button class="btn btn-ghost btn-sm" style="color:#c33" onclick="bDelete(\'' + b.id + '\')">Löschen</button>';
+      h += '</div></div>';
+    });
+    h += '</div>';
+    $('banner-list').innerHTML = h;
+  }
+
+  let h = '<div class="page-wrap"><section class="section">';
+  h += '<button class="btn btn-ghost btn-sm" onclick="render(\'admin-dashboard\')" style="margin-bottom:1rem">&lt; Zurück</button>';
+  h += '<div class="sec-hd"><div class="sec-title">🖼️ Banner verwalten</div></div>';
+
+  // Formular: neuer Banner
+  h += '<details style="margin-bottom:1.5rem;padding:1rem;background:var(--surface2);border-radius:8px" open>';
+  h += '<summary style="cursor:pointer;font-weight:700;margin-bottom:.75rem">+ Neuer Banner</summary>';
+  h += '<div class="auth-form" style="max-width:none">';
+  h += '<div class="fg"><label>Titel (intern)</label><input id="bnTitle" placeholder="z.B. Sommer-Aktion 2026"/></div>';
+  h += '<div class="fg"><label>Bild-URL *</label><input id="bnImg" type="url" placeholder="https://..."/></div>';
+  h += '<div class="fg"><label>Link-URL (optional)</label><input id="bnLink" type="url" placeholder="https://..."/></div>';
+  h += '<div class="fg"><label>Alt-Text (SEO)</label><input id="bnAlt"/></div>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem">';
+  h += '<div class="fg"><label>Position</label><input id="bnPos" type="number" value="0"/></div>';
+  h += '<div class="fg"><label>Start (optional)</label><input id="bnStart" type="datetime-local"/></div>';
+  h += '<div class="fg"><label>Ende (optional)</label><input id="bnEnd" type="datetime-local"/></div>';
+  h += '</div>';
+  h += '<button class="btn btn-primary" onclick="bCreate()" style="margin-top:.75rem">Banner anlegen</button>';
+  h += '</div></details>';
+
+  h += '<div id="banner-list"><div class="loading-wrap"><div class="spinner"></div></div></div>';
+  h += '</section></div>';
+
+  $('content').innerHTML = h;
+  loadList();
+
+  // Handlers
+  window.bCreate = async function () {
+    const payload = {
+      title: $('bnTitle').value.trim(),
+      image_url: $('bnImg').value.trim(),
+      link_url: $('bnLink').value.trim() || null,
+      alt_text: $('bnAlt').value.trim() || null,
+      position: parseInt($('bnPos').value, 10) || 0,
+      start_date: $('bnStart').value || null,
+      end_date: $('bnEnd').value || null,
+      active: true
+    };
+    if (!payload.image_url) { toast('Bild-URL fehlt', 't-error'); return; }
+    try {
+      await apiReq('/admin/banners', 'POST', payload, true);
+      ['bnTitle','bnImg','bnLink','bnAlt','bnStart','bnEnd'].forEach(function(id){ $(id).value=''; });
+      $('bnPos').value = '0';
+      toast('Banner angelegt');
+      loadList();
+    } catch (e) { toast(e.message, 't-error'); }
+  };
+
+  window.bToggle = async function (id, newActive) {
+    try {
+      await apiReq('/admin/banners/' + id, 'PUT', { active: newActive }, true);
+      loadList();
+    } catch (e) { toast(e.message, 't-error'); }
+  };
+
+  window.bEdit = async function (id) {
+    const newUrl  = prompt('Neue Bild-URL (leer = unverändert):');
+    const newPos  = prompt('Neue Position (leer = unverändert):');
+    const newLink = prompt('Neue Link-URL (leer = unverändert):');
+    const update = {};
+    if (newUrl)  update.image_url = newUrl;
+    if (newPos !== null && newPos !== '') update.position = parseInt(newPos, 10) || 0;
+    if (newLink) update.link_url = newLink;
+    if (!Object.keys(update).length) return;
+    try {
+      await apiReq('/admin/banners/' + id, 'PUT', update, true);
+      toast('Aktualisiert');
+      loadList();
+    } catch (e) { toast(e.message, 't-error'); }
+  };
+
+  window.bDelete = async function (id) {
+    if (!confirm('Banner wirklich löschen?')) return;
+    try {
+      await apiReq('/admin/banners/' + id, 'DELETE', null, true);
+      toast('Gelöscht');
+      loadList();
+    } catch (e) { toast(e.message, 't-error'); }
+  };
+});
 /* ---------- INIT + SPA ROUTING ---------- */
 setDir(S.lang);
 updateMeta();
