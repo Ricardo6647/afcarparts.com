@@ -1853,9 +1853,10 @@ route('admin-dashboard', async function () {
 
   let h = '<div class="page-wrap"><div class="dash-layout">';
   h += '<aside class="dash-sidebar">';
-  h += '<div class="ds-section-lbl">' + t('admin.overview') + '</div>';
-  h += '<button class="ds-link active">' + t('admin.overview') + '</button>';
-  h += '</aside>';
+h += '<div class="ds-section-lbl">' + t('admin.overview') + '</div>';
+h += '<button class="ds-link active">' + t('admin.overview') + '</button>';
+h += '<button class="ds-link" onclick="render(\'admin-banners\')">🖼️ Banner verwalten</button>';
+h += '</aside>';
   h += '<section><div class="sec-hd"><div class="sec-title">' + t('admin.overview') + '</div></div>';
 
   h += '<div class="stat-grid">';
