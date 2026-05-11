@@ -28,6 +28,8 @@ router.delete('/categories/:id', adminController.deleteCategory);
 /* -------------------- BANNERS -------------------- */
 // Banner abrufen
 router.get('/banners', adminController.getBanners);
+// Banner aktualisieren (aktiv/inaktiv, Position, Felder bearbeiten)
+router.put('/banners/:id', adminController.updateBanner);
 // Banner hinzufügen
 router.post('/banners', adminController.addBanner);
 // Banner löschen
