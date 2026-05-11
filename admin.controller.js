@@ -1,4 +1,22 @@
 // file: admin.controller.js
+const { readFile, writeFile, mkdir } = require('node:fs/promises');
+const { existsSync } = require('node:fs');
+const path = require('node:path');
+
+const BANNERS_FILE = path.join(__dirname, 'data', 'banners.json');
+
+async function readBanners() {
+  if (!existsSync(path.dirname(BANNERS_FILE))) await mkdir(path.dirname(BANNERS_FILE), { recursive: true });
+  if (!existsSync(BANNERS_FILE)) await writeFile(BANNERS_FILE, '[]', 'utf8');
+  try { return JSON.parse(await readFile(BANNERS_FILE, 'utf8')) || []; }
+  catch { return []; }
+}
+async function writeBanners(arr) {
+  await writeFile(BANNERS_FILE, JSON.stringify(arr, null, 2), 'utf8');
+}
+function nextBannerId(arr) {
+  return arr.reduce((max, b) => Math.max(max, Number(b.id) || 0), 0) + 1;
+}
 const { load, save } = require('./store');
 
 /* -------------------- USERS -------------------- */
