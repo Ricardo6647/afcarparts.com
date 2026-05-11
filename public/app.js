@@ -1057,6 +1057,62 @@ function ticker() {
 }
 
 function adBanners() {
+   async function renderBannerRotator() {
+  try {
+    const res = await apiReq('/banners', 'GET', null, false);
+    const banners = res.data || [];
+    if (!banners.length) return '';
+
+    const slides = banners.map(function (b, i) {
+      const safeImg = String(b.image_url).replace(/'/g, '%27');
+      const aria = esc(b.alt_text || b.title || '');
+      const linkOpen  = b.link_url ? '<a href="' + esc(b.link_url) + '" class="banner-slide' + (i===0?' is-active':'') + '" style="background-image:url(\'' + safeImg + '\')" aria-label="' + aria + '">' : '<div class="banner-slide' + (i===0?' is-active':'') + '" style="background-image:url(\'' + safeImg + '\')" role="img" aria-label="' + aria + '">';
+      const linkClose = b.link_url ? '</a>' : '</div>';
+      return linkOpen + '<span class="visually-hidden">' + aria + '</span>' + linkClose;
+    }).join('');
+
+    const dots = banners.length > 1
+      ? '<div class="banner-dots">' + banners.map(function (_, i) {
+          return '<button class="banner-dot' + (i===0?' is-active':'') + '" data-i="' + i + '" aria-label="Banner ' + (i+1) + '"></button>';
+        }).join('') + '</div>'
+      : '';
+
+    return '<div class="page-wrap"><section class="banner-rotator" data-count="' + banners.length + '">' + slides + dots + '</section></div>';
+  } catch (e) {
+    return '';
+  }
+}
+
+function startBannerRotation(intervalMs) {
+  intervalMs = intervalMs || 6000;
+  const rotator = document.querySelector('.banner-rotator');
+  if (!rotator) return;
+  const slides = rotator.querySelectorAll('.banner-slide');
+  const dots   = rotator.querySelectorAll('.banner-dot');
+  if (slides.length < 2) return;
+
+  let i = 0;
+  const show = function (next) {
+    slides[i].classList.remove('is-active');
+    if (dots[i]) dots[i].classList.remove('is-active');
+    i = (next + slides.length) % slides.length;
+    slides[i].classList.add('is-active');
+    if (dots[i]) dots[i].classList.add('is-active');
+  };
+  let timer = setInterval(function () { show(i + 1); }, intervalMs);
+
+  dots.forEach(function (d) {
+    d.addEventListener('click', function () {
+      clearInterval(timer);
+      show(parseInt(d.dataset.i, 10));
+      timer = setInterval(function () { show(i + 1); }, intervalMs);
+    });
+  });
+  rotator.addEventListener('mouseenter', function () { clearInterval(timer); });
+  rotator.addEventListener('mouseleave', function () {
+    timer = setInterval(function () { show(i + 1); }, intervalMs);
+  });
+}
   return '<div class="page-wrap"><div class="ad-grid">' +
     '<div class="ad-card or" onclick="render(\'products\',{china_only:\'1\'})">' +
       '<div class="ad-card-tag">AD</div>' +
