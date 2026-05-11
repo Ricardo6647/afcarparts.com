@@ -58,7 +58,7 @@ function loadCategories() {
   if (!token) return;
 
   fetch(API + "/admin/categories", {
-    headers: { "Authorization": token }
+    headers: { "Authorization": "Bearer " + token }
   })
     .then(r => r.json())
     .then(res => {
@@ -80,8 +80,7 @@ function loadProducts() {
   if (!token) return;
 
   fetch(API + "/admin/products", {
-    headers: { "Authorization": token }
-  })
+    headers: { "Authorization": "Bearer " + token }
     .then(r => r.json())
     .then(res => {
       const products = res.data || [];
