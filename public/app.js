@@ -1216,7 +1216,8 @@ route('home', async function () {
   h += '<div class="hstat"><strong>9</strong><span>' + t('home.stats_langs') + '</span></div>';
   h += '</div></div></section>';
 
- 
+  // Banner-Rotation (zwischen Hero und Kategorien)
+  h += await renderBannerRotator();
 
   h += '<div class="page-wrap"><section class="section">';
   h += '<div class="sec-hd"><div class="sec-title">' + t('home.categories') + '</div></div>';
@@ -1269,6 +1270,7 @@ route('home', async function () {
   h += '</div></section></div>';
 
   $('content').innerHTML = h;
+  requestAnimationFrame(function () { startBannerRotation(6000); });
 });
 
 function doSearch() {
