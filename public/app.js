@@ -774,7 +774,7 @@ async function apiReq(path, method, body, auth) {
   };
 
   // Dein Backend erwartet KEIN "Bearer", sondern den Token direkt
-  if (auth && S.token) h['Authorization'] = S.token;
+if (auth && S.token) h['Authorization'] = 'Bearer ' + S.token;
 
   const opts = { method: method, headers: h };
   if (body) opts.body = JSON.stringify(body);
@@ -790,7 +790,7 @@ async function apiForm(path, fd, auth) {
   const h = { 'Accept-Language': S.lang };
 
   // Auch hier: KEIN Bearer
-  if (auth && S.token) h['Authorization'] = S.token;
+  if (auth && S.token) h['Authorization'] = 'Bearer ' + S.token;
 
   const res = await fetch(API + path, { 
     method: 'POST', 
