@@ -1175,8 +1175,13 @@ function isWithinSchedule(b, now = Date.now()) {
 }
 /* ---------- BANNERS + ORDERS (noch JSON) ---------- */
 app.get('/api/banners', (req, res) => {
-  const banners = load('banners') || [];
-  res.json({ data: banners.filter(b => b.active !== false) });
+  const all = (load('banners') || []).map(normalizeBanner);
+  const active = all
+    .filter(b => b.active && isWithinSchedule(b))
+    .sort((a, b) => a.position - b.position)
+    .map(({ id, title, image_url, link_url, alt_text, position }) =>
+         ({ id, title, image_url, link_url, alt_text, position }));
+  res.json({ data: active });
 });
 
 app.get('/api/orders', (req, res) => res.json({ data: load('orders') }));
