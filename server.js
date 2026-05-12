@@ -1147,7 +1147,32 @@ app.post('/api/seller/csv-import', requireAuth, upload.single('file'), async (re
     errors: errors.slice(0, 20)
   });
 });
+/* ============================================================
+   BANNERS — Helfer
+   ============================================================ */
 
+// Normalisiert ein Banner-Objekt (mit Defaults für alte Banner)
+function normalizeBanner(b) {
+  return {
+    id:         b.id,
+    title:      b.title || '',
+    image_url:  b.image_url || '',
+    link_url:   b.link_url || '',
+    alt_text:   b.alt_text || '',
+    position:   Number.isFinite(+b.position) ? +b.position : 0,
+    active:     b.active !== false,
+    start_date: b.start_date || null,
+    end_date:   b.end_date   || null,
+    created_at: b.created_at || null,
+    updated_at: b.updated_at || null,
+  };
+}
+
+function isWithinSchedule(b, now = Date.now()) {
+  if (b.start_date && new Date(b.start_date).getTime() > now) return false;
+  if (b.end_date   && new Date(b.end_date).getTime()   < now) return false;
+  return true;
+}
 /* ---------- BANNERS + ORDERS (noch JSON) ---------- */
 app.get('/api/banners', (req, res) => {
   const banners = load('banners') || [];
