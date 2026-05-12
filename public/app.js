@@ -1279,10 +1279,10 @@ async function renderBannerRotator() {
 }
 function startBannerRotation(intervalMs) {
   intervalMs = intervalMs || 6000;
-  const rotator = document.querySelector('.banner-rotator');
-  if (!rotator) return;
-  const slides = rotator.querySelectorAll('.banner-slide');
-  const dots   = rotator.querySelectorAll('.banner-dot');
+  const hero = document.querySelector('.hero');
+  if (!hero) return;
+  const slides = hero.querySelectorAll('.hero-slide-bg');
+  const dots   = hero.querySelectorAll('.hero-dot');
   if (slides.length < 2) return;
 
   let i = 0;
@@ -1302,8 +1302,8 @@ function startBannerRotation(intervalMs) {
       timer = setInterval(function () { show(i + 1); }, intervalMs);
     });
   });
-  rotator.addEventListener('mouseenter', function () { clearInterval(timer); });
-  rotator.addEventListener('mouseleave', function () {
+  hero.addEventListener('mouseenter', function () { clearInterval(timer); });
+  hero.addEventListener('mouseleave', function () {
     timer = setInterval(function () { show(i + 1); }, intervalMs);
   });
 }
