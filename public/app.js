@@ -1194,7 +1194,8 @@ route('home', async function () {
 
   const features = t('home.features');
 
-  let h = '<section class="hero"><div class="hero-inner">';
+  const heroBanners = await renderBannerRotator();
+  let h = '<section class="hero">' + heroBanners + '<div class="hero-inner">';
   h += '<div class="hero-badge">' + t('home.hero_badge') + '</div>';
   h += '<h1>' + t('home.hero_title') + ' <em>' + t('home.hero_title_em') + '</em></h1>';
   h += '<p>' + t('home.hero_sub') + '</p>';
@@ -1217,7 +1218,7 @@ route('home', async function () {
   h += '</div></div></section>';
 
   // Banner-Rotation (zwischen Hero und Kategorien)
-  h += (typeof renderBannerRotator === 'function') ? await renderBannerRotator() : '';
+ 
 
   h += '<div class="page-wrap"><section class="section">';
   h += '<div class="sec-hd"><div class="sec-title">' + t('home.categories') + '</div></div>';
