@@ -1217,7 +1217,7 @@ route('home', async function () {
   h += '</div></div></section>';
 
   // Banner-Rotation (zwischen Hero und Kategorien)
-  h += await renderBannerRotator();
+  h += (typeof renderBannerRotator === 'function') ? await renderBannerRotator() : '';
 
   h += '<div class="page-wrap"><section class="section">';
   h += '<div class="sec-hd"><div class="sec-title">' + t('home.categories') + '</div></div>';
