@@ -1203,7 +1203,27 @@ app.post('/api/admin/banners', requireAdmin, (req, res) => {
   save('banners', banners);
   res.json({ success: true, banner });
 });
+// ADMIN: Banner aktualisieren (Toggle aktiv/inaktiv, Position ändern, Felder bearbeiten)
+app.put('/api/admin/banners/:id', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const banners = load('banners') || [];
+  const idx = banners.findIndex(b => String(b.id) === String(id));
+  if (idx === -1) return res.status(404).json({ error: 'Banner not found' });
 
+  const allowed = ['title','image_url','link_url','alt_text',
+                   'position','active','start_date','end_date'];
+  for (const key of allowed) {
+    if (req.body[key] !== undefined) {
+      banners[idx][key] =
+        key === 'position' ? (Number.isFinite(+req.body[key]) ? +req.body[key] : 0) :
+        key === 'active'   ? !!req.body[key] :
+        req.body[key];
+    }
+  }
+  banners[idx].updated_at = new Date().toISOString();
+  save('banners', banners);
+  res.json({ success: true, banner: normalizeBanner(banners[idx]) });
+});
 app.delete('/api/admin/banners/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
   let banners = load('banners') || [];
