@@ -1262,27 +1262,21 @@ async function renderBannerRotator() {
 
     const slides = banners.map(function (b, i) {
       const safeImg = String(b.image_url).replace(/'/g, '%27');
-      const aria = esc(b.alt_text || b.title || '');
-      const linkOpen  = b.link_url
-        ? '<a href="' + esc(b.link_url) + '" class="banner-slide' + (i===0?' is-active':'') + '" style="background-image:url(\'' + safeImg + '\')" aria-label="' + aria + '">'
-        : '<div class="banner-slide' + (i===0?' is-active':'') + '" style="background-image:url(\'' + safeImg + '\')" role="img" aria-label="' + aria + '">';
-      const linkClose = b.link_url ? '</a>' : '</div>';
-      return linkOpen + '<span class="visually-hidden">' + aria + '</span>' + linkClose;
+      return '<div class="hero-slide-bg' + (i===0?' is-active':'') + '" style="background-image:url(\'' + safeImg + '\')" aria-hidden="true"></div>';
     }).join('');
 
     const dots = banners.length > 1
-      ? '<div class="banner-dots">' + banners.map(function (_, i) {
-          return '<button class="banner-dot' + (i===0?' is-active':'') + '" data-i="' + i + '" aria-label="Banner ' + (i+1) + '"></button>';
+      ? '<div class="hero-dots">' + banners.map(function (_, i) {
+          return '<button class="hero-dot' + (i===0?' is-active':'') + '" data-i="' + i + '" aria-label="Banner ' + (i+1) + '"></button>';
         }).join('') + '</div>'
       : '';
 
-    return '<div class="page-wrap"><section class="banner-rotator" data-count="' + banners.length + '">' + slides + dots + '</section></div>';
+    return slides + '<div class="hero-bg-overlay"></div>' + dots;
   } catch (e) {
     console.error('renderBannerRotator', e);
     return '';
   }
 }
-
 function startBannerRotation(intervalMs) {
   intervalMs = intervalMs || 6000;
   const rotator = document.querySelector('.banner-rotator');
