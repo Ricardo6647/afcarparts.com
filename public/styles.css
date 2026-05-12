@@ -1837,3 +1837,46 @@ nav#navbar {
 @media (max-width: 640px) {
   .banner-rotator { height: 200px; }
 }
+/* ============ HERO BANNER ROTATION ============ */
+.hero {
+  position: relative;
+  overflow: hidden;
+}
+.hero-slide-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  transition: opacity 800ms ease;
+  z-index: 0;
+  pointer-events: none;
+}
+.hero-slide-bg.is-active { opacity: 1; }
+.hero-bg-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.65));
+  z-index: 1;
+  pointer-events: none;
+}
+.hero-inner {
+  position: relative;
+  z-index: 2;
+}
+.hero-dots {
+  position: absolute;
+  bottom: 18px; left: 0; right: 0;
+  z-index: 3;
+  display: flex; justify-content: center; gap: 8px;
+}
+.hero-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(255,255,255,.5);
+  cursor: pointer;
+  padding: 0;
+  transition: background 200ms, transform 200ms;
+}
+.hero-dot.is-active { background: #fff; transform: scale(1.3); }
