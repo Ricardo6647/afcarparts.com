@@ -11,6 +11,7 @@ const multer = require('multer');
 const fs = require('fs');
 
 const { load, save } = require('./store');
+const { uploadToR2, deleteFromR2 } = require('./r2');
 const { query } = require('./db');
 const db = require('./storeDb');
 
@@ -56,25 +57,17 @@ app.use('/uploads', express.static(uploadsDir));
 const upload = multer({ dest: uploadsDir });
 
 // === PATCH A (Etappe 4.2): Image-Upload mit Validierung (jpg/png, max 2 MB) ===
+// Phase R2: Bilder kommen als Buffer in req.files, werden direkt zu R2 gestreamt
 const imageUpload = multer({
-  storage: multer.diskStorage({
-    destination: uploadsDir,
-    filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase();
-      const allowedExt = ['.jpg', '.jpeg', '.png'].includes(ext) ? ext : '.jpg';
-      const unique = Date.now() + '-' + Math.random().toString(36).slice(2, 10);
-      cb(null, unique + allowedExt);
-    },
-  }),
+  storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
-    if (!['image/jpeg', 'image/png'].includes(file.mimetype)) {
-      return cb(new Error('Nur JPEG und PNG erlaubt'));
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) {
+      return cb(new Error('Nur JPEG, PNG und WebP erlaubt'));
     }
     cb(null, true);
   },
-  limits: { fileSize: 2 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB pro Bild
 });
-
 const publicDir = fs.existsSync(path.join(__dirname, 'public'))
   ? path.join(__dirname, 'public')
   : __dirname;
@@ -838,17 +831,44 @@ app.delete('/api/admin/products/:id', requireAdmin, async (req, res) => {
    Image-Upload + CRUD mit Ownership-Check
    ============================================================ */
 app.post('/api/upload/images', requireAuth, (req, res) => {
-  imageUpload.array('images', 5)(req, res, (err) => {
+  imageUpload.array('images', 5)(req, res, async (err) => {
     if (err) {
-      if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'Eine Datei ist größer als 2 MB' });
-      if (err.code === 'LIMIT_UNEXPECTED_FILE') return res.status(400).json({ error: 'Maximal 5 Bilder erlaubt' });
+      if (err.code === 'LIMIT_FILE_SIZE')      return res.status(413).json({ error: 'A file is larger than 5 MB' });
+      if (err.code === 'LIMIT_UNEXPECTED_FILE') return res.status(400).json({ error: 'Maximum 5 images allowed' });
       return res.status(400).json({ error: err.message });
     }
-    if (!req.files || req.files.length === 0) return res.status(400).json({ error: 'Keine Datei erhalten' });
-    // Absolute URL zurückgeben, damit Bilder von Hostinger (afcarparts.com) UND Render aus geladen werden können
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const urls = req.files.map(f => baseUrl + '/uploads/' + f.filename);
-    res.json({ urls });
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: 'No file received' });
+    }
+
+    // Phase R2: upload buffers to Cloudflare R2, return public URLs
+    const folder = (req.body.folder || 'products').toString();
+    try {
+      const urls = await Promise.all(
+        req.files.map(f => uploadToR2(f.buffer, f.originalname, f.mimetype, folder))
+      );
+      res.json({ urls });
+    } catch (uploadErr) {
+      console.error('[upload/images] R2 upload failed:', uploadErr);
+      res.status(500).json({ error: 'Upload failed: ' + uploadErr.message });
+    }
+  });
+});
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: 'Keine Datei erhalten' });
+    }
+    // Phase R2: hochladen zu Cloudflare R2, öffentliche URLs zurückgeben
+    const folder = (req.body.folder || 'products').toString();
+    try {
+      const urls = await Promise.all(
+        req.files.map(f => uploadToR2(f.buffer, f.originalname, f.mimetype, folder))
+      );
+      res.json({ urls });
+    } catch (err) {
+      console.error('[upload/images] R2 upload failed:', err);
+      res.status(500).json({ error: 'Upload fehlgeschlagen: ' + err.message });
+    }
   });
 });
 
