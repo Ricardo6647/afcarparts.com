@@ -837,11 +837,9 @@ app.post('/api/upload/images', requireAuth, (req, res) => {
       if (err.code === 'LIMIT_UNEXPECTED_FILE') return res.status(400).json({ error: 'Maximum 5 images allowed' });
       return res.status(400).json({ error: err.message });
     }
-
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ error: 'No file received' });
     }
-
     // Phase R2: upload buffers to Cloudflare R2, return public URLs
     const folder = (req.body.folder || 'products').toString();
     try {
@@ -852,22 +850,6 @@ app.post('/api/upload/images', requireAuth, (req, res) => {
     } catch (uploadErr) {
       console.error('[upload/images] R2 upload failed:', uploadErr);
       res.status(500).json({ error: 'Upload failed: ' + uploadErr.message });
-    }
-  });
-});
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ error: 'Keine Datei erhalten' });
-    }
-    // Phase R2: hochladen zu Cloudflare R2, öffentliche URLs zurückgeben
-    const folder = (req.body.folder || 'products').toString();
-    try {
-      const urls = await Promise.all(
-        req.files.map(f => uploadToR2(f.buffer, f.originalname, f.mimetype, folder))
-      );
-      res.json({ urls });
-    } catch (err) {
-      console.error('[upload/images] R2 upload failed:', err);
-      res.status(500).json({ error: 'Upload fehlgeschlagen: ' + err.message });
     }
   });
 });
