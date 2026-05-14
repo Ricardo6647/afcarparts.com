@@ -632,9 +632,14 @@ app.get('/api/products', async (req, res) => {
       }
     }
     if (q && q.trim()) {
-      conditions.push(`p.id IN (
-        SELECT pt.product_id FROM product_translations pt
-        WHERE (pt.title ILIKE $${i} OR pt.description ILIKE $${i})
+      conditions.push(`(
+        p.brand ILIKE $${i} OR
+        p.model ILIKE $${i} OR
+        p.oem   ILIKE $${i} OR
+        p.id IN (
+          SELECT pt.product_id FROM product_translations pt
+          WHERE pt.title ILIKE $${i} OR pt.description ILIKE $${i}
+        )
       )`);
       params.push('%' + q.trim() + '%');
       i++;
