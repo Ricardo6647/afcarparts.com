@@ -649,7 +649,9 @@ app.get('/api/products', async (req, res) => {
     if (sort === 'price_asc') orderBy = 'p.price_usd ASC';
     else if (sort === 'price_desc') orderBy = 'p.price_usd DESC';
     else if (sort === 'popular') orderBy = 'p.view_count DESC, p.created_at DESC';
-    const countRes = await query(`SELECT COUNT(*) AS c FROM products p ${where}`, params.slice(1));
+    // COUNT-Query nutzt params.slice(1) (ohne lang) — daher Platzhalter $2→$1, $3→$2 etc. umnummerieren
+    const countWhere = where.replace(/\$(\d+)/g, (_, n) => '$' + (parseInt(n, 10) - 1));
+    const countRes = await query(`SELECT COUNT(*) AS c FROM products p ${countWhere}`, params.slice(1));
     const total = parseInt(countRes.rows[0].c, 10);
     const pg = Math.max(1, parseInt(page, 10) || 1);
     const lim = Math.min(100, Math.max(1, parseInt(limit, 10) || 24));
