@@ -1175,6 +1175,17 @@ function isWithinSchedule(b, now = Date.now()) {
   if (b.end_date   && new Date(b.end_date).getTime()   < now) return false;
   return true;
 }
+
+// R2-Cleanup-Helper: löscht Bild auf R2 wenn URL aus unserem Bucket kommt (best-effort, blockiert nichts)
+function tryDeleteR2Image(url) {
+  if (!url) return;
+  const publicBase = process.env.R2_PUBLIC_URL;
+  if (!publicBase || !url.startsWith(publicBase)) return; // externe URL → ignorieren
+  deleteFromR2(url)
+    .then(() => console.log('[R2] Bild gelöscht:', url))
+    .catch(e => console.warn('[R2] Löschung fehlgeschlagen:', url, '-', e.message));
+}
+
 /* ---------- BANNERS + ORDERS (noch JSON) ---------- */
 app.get('/api/banners', (req, res) => {
   const all = (load('banners') || []).map(normalizeBanner);
@@ -1223,17 +1234,24 @@ app.get('/api/admin/banners', requireAdmin, (req, res) => {
 });
 
 app.post('/api/admin/banners', requireAdmin, (req, res) => {
-  const { image_url, link_url } = req.body || {};
-  if (!image_url) return res.status(400).json({ error: 'Missing image_url' });
+  const body = req.body || {};
+  if (!body.image_url) return res.status(400).json({ error: 'Missing image_url' });
   const banners = load('banners') || [];
   const banner = {
-    id: Date.now().toString(),
-    image_url, link_url: link_url || '',
-    active: true, created_at: new Date().toISOString()
+    id:         Date.now().toString(),
+    title:      body.title || '',
+    image_url:  body.image_url,
+    link_url:   body.link_url || '',
+    alt_text:   body.alt_text || '',
+    position:   Number.isFinite(+body.position) ? +body.position : 0,
+    start_date: body.start_date || null,
+    end_date:   body.end_date || null,
+    active:     body.active !== undefined ? !!body.active : true,
+    created_at: new Date().toISOString()
   };
   banners.push(banner);
   save('banners', banners);
-  res.json({ success: true, banner });
+  res.json({ success: true, banner: normalizeBanner(banner) });
 });
 // ADMIN: Banner aktualisieren (Toggle aktiv/inaktiv, Position ändern, Felder bearbeiten)
 app.put('/api/admin/banners/:id', requireAdmin, (req, res) => {
@@ -1241,6 +1259,9 @@ app.put('/api/admin/banners/:id', requireAdmin, (req, res) => {
   const banners = load('banners') || [];
   const idx = banners.findIndex(b => String(b.id) === String(id));
   if (idx === -1) return res.status(404).json({ error: 'Banner not found' });
+
+  // Altes Bild merken (für R2-Cleanup falls ersetzt)
+  const oldImageUrl = banners[idx].image_url;
 
   const allowed = ['title','image_url','link_url','alt_text',
                    'position','active','start_date','end_date'];
@@ -1254,14 +1275,31 @@ app.put('/api/admin/banners/:id', requireAdmin, (req, res) => {
   }
   banners[idx].updated_at = new Date().toISOString();
   save('banners', banners);
+
+  // R2-Cleanup: wenn Bild geändert wurde, altes auf R2 löschen (fire-and-forget)
+  const newImageUrl = banners[idx].image_url;
+  if (oldImageUrl && newImageUrl && oldImageUrl !== newImageUrl) {
+    tryDeleteR2Image(oldImageUrl);
+  }
+
   res.json({ success: true, banner: normalizeBanner(banners[idx]) });
 });
 app.delete('/api/admin/banners/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
   let banners = load('banners') || [];
+
+  // Banner finden bevor wir löschen (für R2-Cleanup)
+  const banner = banners.find(b => String(b.id) === String(id));
+
   const before = banners.length;
   banners = banners.filter(b => String(b.id) !== String(id));
   save('banners', banners);
+
+  // R2-Cleanup: Bild mitlöschen falls auf R2 (fire-and-forget)
+  if (banner && banner.image_url) {
+    tryDeleteR2Image(banner.image_url);
+  }
+
   res.json({ success: true, deleted: before - banners.length });
 });
 
