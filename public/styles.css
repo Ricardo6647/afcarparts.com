@@ -419,57 +419,79 @@ nav#navbar {
   margin-right: auto;
 }
 
-/* SEARCH BAR */
+/* SEARCH BAR — taller, more rectangular, mobile.de-style */
 .search-bar {
   background: var(--surface);
-  border: 2px solid var(--border);
-  border-radius: 50px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
   display: flex;
   overflow: hidden;
-  max-width: 580px;
+  max-width: 720px;
   margin: 0 auto;
-  box-shadow: 0 6px 30px rgba(0,48,87,0.28);
+  box-shadow: 0 8px 24px rgba(0,48,87,0.18);
 }
-
 .search-bar input {
   flex: 1;
   background: transparent;
   border: none;
   outline: none;
-  padding: .82rem 1.3rem;
-  font-size: .93rem;
+  padding: 1.15rem 1.3rem;
+  font-size: 1rem;
   color: var(--text);
 }
-
 .search-bar input::placeholder { color: var(--text3); }
-
 .search-bar .sb-cat {
   background: transparent;
   border: none;
   border-right: 1px solid var(--border);
-  padding: 0 1rem;
+  padding: 0 1.1rem;
   color: var(--text2);
-  font-size: .8rem;
+  font-size: .9rem;
   cursor: pointer;
   white-space: nowrap;
+  min-width: 150px;
 }
-
 .search-bar .sb-cat:focus { outline: 2px solid var(--p400); }
-
 .search-bar button {
   background: var(--a500);
   border: none;
-  border-radius: 0 50px 50px 0;
-  padding: 0 1.5rem;
+  border-radius: 0;
+  padding: 0 2rem;
   color: #fff;
   font-weight: 700;
-  font-size: .88rem;
+  font-size: .95rem;
   transition: background .15s;
   white-space: nowrap;
+  cursor: pointer;
+  min-width: 140px;
 }
-
 .search-bar button:hover { background: var(--a400); }
 
+/* Mobile: stack vertically auf kleinen Screens */
+@media (max-width: 640px) {
+  .search-bar {
+    flex-direction: column;
+    max-width: 100%;
+  }
+  .search-bar .sb-cat {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: .9rem 1rem;
+    min-width: 0;
+    width: 100%;
+  }
+  .search-bar input {
+    padding: .9rem 1rem;
+  }
+  .search-bar button {
+    padding: 1rem;
+    font-size: 1rem;
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+/* hero-stats bleibt unverändert */
 .hero-stats {
   display: flex;
   justify-content: center;
@@ -477,7 +499,6 @@ nav#navbar {
   margin-top: 2.2rem;
   flex-wrap: wrap;
 }
-
 .hstat strong {
   display: block;
   font-family: var(--fh);
@@ -485,7 +506,6 @@ nav#navbar {
   font-weight: 800;
   color: var(--a300);
 }
-
 .hstat span {
   font-size: .73rem;
   color: rgba(255,255,255,0.55);
