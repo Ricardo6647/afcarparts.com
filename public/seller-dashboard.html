@@ -34,15 +34,11 @@
 
     /* ===== LANGUAGE SWITCHER ===== */
     .lang-switcher {
-      position: fixed;
-      top: 12px;
-      right: 12px;
-      z-index: 1000;
+      display: inline-block;
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 4px;
-      box-shadow: var(--shadow);
+      padding: 2px;
     }
     .lang-switcher select {
       border: none;
@@ -53,6 +49,11 @@
       padding: 4px 8px;
       color: var(--text);
       outline: none;
+    }
+    /* Variant for login screen: top-right of login card */
+    .login-card .lang-switcher {
+      float: right;
+      margin-bottom: 8px;
     }
     
     /* ===== LOGIN SCREEN ===== */
@@ -507,22 +508,21 @@
 </head>
 <body>
 
-<!-- LANGUAGE SWITCHER -->
-<div class="lang-switcher">
-  <select id="lang-select" aria-label="Language">
-    <option value="de">🇩🇪 Deutsch</option>
-    <option value="en">🇬🇧 English</option>
-    <option value="fr">🇫🇷 Français</option>
-    <option value="pt">🇵🇹 Português</option>
-    <option value="es">🇪🇸 Español</option>
-  </select>
-</div>
-
 <!-- ============================================================
      LOGIN / REGISTER SCREEN
      ============================================================ -->
 <div id="login-screen">
   <div class="login-card">
+    <div class="lang-switcher">
+      <select class="lang-select" aria-label="Language">
+        <option value="de">🇩🇪 Deutsch</option>
+        <option value="en">🇬🇧 English</option>
+        <option value="fr">🇫🇷 Français</option>
+        <option value="pt">🇵🇹 Português</option>
+        <option value="es">🇪🇸 Español</option>
+      </select>
+    </div>
+    <div style="clear:both"></div>
     <h1 data-i18n="auth.title">Händler-Bereich</h1>
     <p class="subtitle" data-i18n="auth.subtitle">Melde dich an oder registriere dich als Händler.</p>
     
@@ -601,6 +601,15 @@
     <div class="user-info">
       <span class="user-email" id="header-email"></span>
       <span class="user-role" id="header-role"></span>
+      <div class="lang-switcher">
+        <select class="lang-select" aria-label="Language">
+          <option value="de">🇩🇪 DE</option>
+          <option value="en">🇬🇧 EN</option>
+          <option value="fr">🇫🇷 FR</option>
+          <option value="pt">🇵🇹 PT</option>
+          <option value="es">🇪🇸 ES</option>
+        </select>
+      </div>
       <button class="btn btn-secondary btn-sm" id="logout-btn" data-i18n="dash.logout">Logout</button>
     </div>
   </header>
@@ -1985,12 +1994,18 @@ window.deleteProduct = async function(id) {
 // INIT
 // ============================================================
 
-// Language switcher: dropdown setup + change handler
+// Language switcher: setup all .lang-select dropdowns + sync them
 (function setupLangSwitcher() {
-  const sel = document.getElementById('lang-select');
-  if (!sel) return;
-  sel.value = currentLang;
-  sel.addEventListener('change', () => setLang(sel.value));
+  const sels = document.querySelectorAll('.lang-select');
+  sels.forEach(sel => {
+    sel.value = currentLang;
+    sel.addEventListener('change', () => {
+      const newLang = sel.value;
+      setLang(newLang);
+      // sync other dropdowns
+      sels.forEach(other => { if (other !== sel) other.value = newLang; });
+    });
+  });
 })();
 
 // Apply i18n once on first render
