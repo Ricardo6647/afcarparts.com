@@ -1340,7 +1340,7 @@ route('products', async function (P) {
   P = P || {};
   let cats = [];
   try {
-    const cR = await apiReq('/admin/categories', 'GET', null, false);
+    const cR = await apiReq('/categories?lang=' + S.lang, 'GET', null, false);
     cats = Array.isArray(cR) ? cR : (cR.data || []);
   } catch (e) {}
 
