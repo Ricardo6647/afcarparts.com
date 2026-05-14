@@ -2146,4 +2146,31 @@ route('admin-banners', async function () {
     } catch (e) { toast(e.message, 't-error'); }
   };
 });
+
+/* ---------- INIT + SPA ROUTING ---------- */
+setDir(S.lang);
+updateMeta();
+
+// Browser Back/Forward → re-render
+window.addEventListener('popstate', function (e) {
+  if (e.state && e.state.name) {
+    render(e.state.name, e.state.params || {}, true);
+  } else {
+    render('home', {}, true);
+  }
+});
+
+// Beim Laden: aus URL-Hash die richtige Route ermitteln
+function _initRouteFromHash() {
+  const hash = window.location.hash.slice(1);
+  if (!hash) { render('home'); return; }
+  const parts = hash.split('?');
+  const name = parts[0] || 'home';
+  const params = {};
+  if (parts[1]) {
+    new URLSearchParams(parts[1]).forEach(function (v, k) { params[k] = v; });
+  }
+  render(name, params);
+}
+
 _initRouteFromHash();
