@@ -19,6 +19,7 @@ const db = require('./storeDb');
 const cookieParser = require('cookie-parser');
 const userDb = require('./userDb');
 const { signAccessToken, verifyAccessToken } = require('./auth');
+const { autoFillTranslations } = require('./translator');
 
 const app = express();
 
@@ -926,6 +927,16 @@ app.post('/api/seller/products', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Gültiger Preis ist Pflicht' });
   }
   try {
+    // 🌍 Auto-Übersetzung: aus Quellsprache in alle anderen unterstützten Sprachen
+    const sourceTr = translations[default_lang];
+    const autoTranslations = await autoFillTranslations({
+      defaultLang: default_lang,
+      title: sourceTr.title,
+      description: sourceTr.description,
+    });
+    // Manuell vom User übergebene Übersetzungen überschreiben die Auto-Übersetzungen
+    const finalTranslations = { ...autoTranslations, ...translations };
+
     const newProd = await db.insert('products', {
       default_lang, price_usd: parseFloat(price_usd),
       brand: brand?.trim() || null, model: model?.trim() || null,
@@ -938,7 +949,7 @@ app.post('/api/seller/products', requireAuth, async (req, res) => {
       active: true
     });
     for (const lang of SUPPORTED_LANGS) {
-      const tr = translations[lang];
+      const tr = finalTranslations[lang];
       if (tr && tr.title && tr.title.trim()) {
         await db.insert('product_translations', {
           product_id: newProd.id, lang,
