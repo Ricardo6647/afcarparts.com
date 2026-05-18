@@ -995,8 +995,21 @@ app.put('/api/seller/products/:id', requireAuth, async (req, res) => {
     if (active !== undefined) updates.active = !!active;
     if (Object.keys(updates).length > 0) await db.update('products', id, updates);
     if (translations && typeof translations === 'object') {
+      // 🌍 Auto-Übersetzung: wenn default_lang + Quelltext im Body, fülle andere Sprachen auf
+      let finalTranslations = translations;
+      const effectiveLang = default_lang && SUPPORTED_LANGS.includes(default_lang) ? default_lang : null;
+      if (effectiveLang && translations[effectiveLang]?.title?.trim()) {
+        const sourceTr = translations[effectiveLang];
+        const autoTranslations = await autoFillTranslations({
+          defaultLang: effectiveLang,
+          title: sourceTr.title,
+          description: sourceTr.description,
+        });
+        // Manuell übergebene Übersetzungen überschreiben Auto-Übersetzungen
+        finalTranslations = { ...autoTranslations, ...translations };
+      }
       for (const lang of SUPPORTED_LANGS) {
-        const tr = translations[lang];
+        const tr = finalTranslations[lang];
         if (tr === undefined) continue;
         if (tr === null || (!tr.title && !tr.description)) {
           await query('DELETE FROM product_translations WHERE product_id = $1 AND lang = $2', [id, lang]);
