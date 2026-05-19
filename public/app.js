@@ -1634,9 +1634,38 @@ route('home', async function () {
         '<span class="cat-icon">' + esc(c.icon || '*') + '</span>' + esc(c['name_' + S.lang] || c.name) + '</button>';
     });
   } else {
-    h += '<span style="color:var(--text3);font-size:.85rem">No categories yet.</span>';
-  }
-  h += '</div></section>';
+   // Banner-Rotation (zwischen Hero und Kategorien)
+
+  h += '<div class="page-wrap" style="padding-top:1.5rem;padding-bottom:.5rem">';
+  h += '<a href="javascript:void(0)" onclick="render(\'products\')" style="display:flex;align-items:center;gap:.75rem;background:var(--a500);color:#fff;font-family:var(--fh);font-size:1.2rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:.9rem 1.75rem;border-radius:var(--r12);border:none;cursor:pointer;box-shadow:0 4px 18px rgba(232,99,0,.35);text-decoration:none;width:100%;justify-content:center;margin-bottom:1.25rem;box-sizing:border-box">'
+  + '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>'
+  + 'PKW-Ersatzteile<span style="font-family:var(--fb);font-size:.78rem;font-weight:500;opacity:.82;text-transform:none;margin-left:auto">Alle Marken &amp; Modelle \u2192</span></a>';
+  h += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.85rem">';
+  var vcats = [
+    { label:'LKW-Ersatzteile',     sub:'Nutzfahrzeuge',          href:'https://lkwteile.autodoc.de/',      icon:'<rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>' },
+    { label:'Motorrad-Ersatzteile',sub:'Alle Modelle',           href:'https://moto.autodoc.de/',          icon:'<circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/><path d="M15 6h2l3 5H9l2-5h4z"/><path d="M9 11l-3.5 6.5"/><path d="M15 6l-2 5"/>' },
+    { label:'Reifen',              sub:'Sommer · Winter · Ganzjahr', cat:'reifen',                         icon:'<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="9"/><line x1="12" y1="15" x2="12" y2="22"/><line x1="2" y1="12" x2="9" y2="12"/><line x1="15" y1="12" x2="22" y2="12"/>' },
+    { label:'Felgen',              sub:'Stahl · Alu · Chrom',    href:'https://www.autodoc.de/felgen',     icon:'<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="2"/><line x1="12" y1="2" x2="12" y2="10"/><line x1="12" y1="14" x2="12" y2="22"/><line x1="2" y1="12" x2="10" y2="12"/><line x1="14" y1="12" x2="22" y2="12"/><line x1="4.93" y1="4.93" x2="10.54" y2="10.54"/><line x1="13.46" y1="13.46" x2="19.07" y2="19.07"/><line x1="19.07" y1="4.93" x2="13.46" y2="10.54"/><line x1="10.54" y1="13.46" x2="4.93" y2="19.07"/>' },
+    { label:'Werkzeuge',           sub:'Profi &amp; Hobby',      cat:'werkzeuge',                         icon:'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>' },
+    { label:'Autozubeh\u00f6r',   sub:'Innen &amp; Au\u00dfen', cat:'zubehoer',                          icon:'<path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>' },
+    { label:'Motor\u00f6l',       sub:'Alle Viskosit\u00e4ten', cat:'motoroel',                          icon:'<path d="M12 2c0 0-7 8.5-7 13a7 7 0 0 0 14 0c0-4.5-7-13-7-13z"/><path d="M12 12v5"/><path d="M9 14l3-2 3 2"/>' },
+    { label:'Filter',              sub:'Öl · Luft · Kraftstoff', cat:'filter',                            icon:'<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>' },
+    { label:'Bremsen',             sub:'Bel\u00e4ge · Scheiben', cat:'bremsen',                           icon:'<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="4.93" y1="4.93" x2="8.34" y2="8.34"/><line x1="15.66" y1="15.66" x2="19.07" y2="19.07"/><line x1="4.93" y1="19.07" x2="8.34" y2="15.66"/><line x1="15.66" y1="8.34" x2="19.07" y2="4.93"/>' }
+  ];
+  vcats.forEach(function(vc) {
+    var onclick = vc.href
+      ? 'window.open(\'' + vc.href + '\',\'_blank\')'
+      : 'render(\'products\',{category:\'' + vc.cat + '\'})';
+    h += '<div onclick="' + onclick + '" style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r12);padding:1.1rem .85rem .9rem;display:flex;flex-direction:column;align-items:center;gap:.45rem;cursor:pointer;box-shadow:var(--sh);transition:var(--tr)"'
+       + ' onmouseover="this.style.borderColor=\'var(--a400)\';this.style.transform=\'translateY(-3px)\';this.style.boxShadow=\'var(--sha)\'"'
+       + ' onmouseout="this.style.borderColor=\'var(--border)\';this.style.transform=\'\';this.style.boxShadow=\'var(--sh)\'">'
+       + '<div style="width:48px;height:48px;background:var(--a050);border-radius:50%;display:flex;align-items:center;justify-content:center">'
+       + '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--a500)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + vc.icon + '</svg></div>'
+       + '<span style="font-family:var(--fh);font-size:.9rem;font-weight:700;text-align:center;color:var(--text);line-height:1.2">' + vc.label + '</span>'
+       + '<span style="font-size:.7rem;color:var(--text3);text-align:center">' + vc.sub + '</span>'
+       + '</div>';
+  });
+  h += '</div></div>';
 
   h += '<section class="section">';
   h += '<div class="sec-hd"><div><div class="sec-title">' + t('home.featured');
