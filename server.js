@@ -14,7 +14,8 @@ const { load, save } = require('./store');
 const { uploadToR2, deleteFromR2 } = require('./r2');
 const { query } = require('./db');
 const db = require('./storeDb');
-
+const billingDb = require('./billingDb');
+   const payments = require('./paymentProviders'); // Phase 0: Fundament + Routing
 // === PATCH 1: Auth-Imports ===
 const cookieParser = require('cookie-parser');
 const userDb = require('./userDb');
@@ -211,7 +212,216 @@ app.post('/api/admin/run-migration', async (req, res) => {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
+// file: server.js — Block einfügen (Phase 0 Migrations-Endpoint)
+// Oberhalb von app.get('/api/seed-categories', ...) platzieren.
+// Nutzt deinen vorhandenen query()-Helper und ?secret=-Schutz.
 
+/* ============================================================
+   PHASE 0 - BILLING/MARKETPLACE MIGRATION
+   Einmal aufrufen: GET /api/migrate-billing?secret=MIGRATION_SECRET
+   Idempotent (CREATE TABLE IF NOT EXISTS) - mehrfach aufrufbar.
+   ============================================================ */
+app.get('/api/migrate-billing', async (req, res) => {
+  if (!process.env.MIGRATION_SECRET) return res.status(503).json({ error: 'MIGRATION_SECRET not set' });
+  if (req.query.secret !== process.env.MIGRATION_SECRET) return res.status(401).json({ error: 'Invalid secret' });
+
+  const log = [];
+  try {
+    // 1) ID-Typen der bestehenden Tabellen erkennen, damit FKs typkompatibel sind.
+    const typeRes = await query(
+      `SELECT table_name, data_type
+         FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND column_name = 'id'
+          AND table_name IN ('users','shops','products')`
+    );
+    const map = {};
+    for (const row of typeRes.rows) map[row.table_name] = row.data_type;
+
+    const toCol = (dt) => {
+      switch ((dt || '').toLowerCase()) {
+        case 'integer':           return 'INTEGER';
+        case 'bigint':            return 'BIGINT';
+        case 'smallint':          return 'SMALLINT';
+        case 'uuid':              return 'UUID';
+        case 'numeric':           return 'NUMERIC';
+        case 'character varying':
+        case 'text':              return 'TEXT';
+        default:                  return 'BIGINT'; // sinnvoller Default
+      }
+    };
+    const USER_ID    = toCol(map['users']);
+    const SHOP_ID    = toCol(map['shops']);
+    const PRODUCT_ID = toCol(map['products']);
+    log.push(`detected id types: users=${map['users']||'?'} shops=${map['shops']||'?'} products=${map['products']||'?'}`);
+
+    const stmts = [
+      // MERCHANTS
+      `CREATE TABLE IF NOT EXISTS merchants (
+         id BIGSERIAL PRIMARY KEY,
+         user_id ${USER_ID} UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+         kyc_status TEXT NOT NULL DEFAULT 'none'
+           CHECK (kyc_status IN ('none','pending','verified','rejected')),
+         default_payout_provider TEXT,
+         contract_version TEXT,
+         contract_accepted_at TIMESTAMPTZ,
+         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+       )`,
+
+      // PROVIDER ACCOUNTS
+      `CREATE TABLE IF NOT EXISTS provider_accounts (
+         id BIGSERIAL PRIMARY KEY,
+         merchant_id BIGINT NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+         provider TEXT NOT NULL CHECK (provider IN ('stripe','flutterwave','payoneer')),
+         kind TEXT NOT NULL CHECK (kind IN ('customer','subaccount','payee','connect')),
+         external_id TEXT,
+         status TEXT NOT NULL DEFAULT 'active',
+         currency TEXT,
+         meta JSONB NOT NULL DEFAULT '{}'::jsonb,
+         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+         updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+         UNIQUE (merchant_id, provider, kind)
+       )`,
+
+      // SUBSCRIPTIONS
+      `CREATE TABLE IF NOT EXISTS subscriptions (
+         id BIGSERIAL PRIMARY KEY,
+         merchant_id BIGINT NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+         provider TEXT NOT NULL CHECK (provider IN ('stripe','flutterwave','payoneer')),
+         plan TEXT NOT NULL CHECK (plan IN ('basic','pro')),
+         product_limit INTEGER NOT NULL DEFAULT 0,
+         status TEXT NOT NULL DEFAULT 'incomplete'
+           CHECK (status IN ('active','past_due','unpaid','canceled','incomplete')),
+         provider_subscription_id TEXT NOT NULL,
+         current_period_end TIMESTAMPTZ,
+         cancel_at_period_end BOOLEAN NOT NULL DEFAULT false,
+         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+         updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+         UNIQUE (provider, provider_subscription_id)
+       )`,
+
+      // ORDERS
+      `CREATE TABLE IF NOT EXISTS orders (
+         id BIGSERIAL PRIMARY KEY,
+         buyer_user_id ${USER_ID} REFERENCES users(id) ON DELETE SET NULL,
+         email TEXT,
+         currency TEXT NOT NULL DEFAULT 'USD',
+         subtotal NUMERIC(12,2) NOT NULL DEFAULT 0,
+         shipping NUMERIC(12,2) NOT NULL DEFAULT 0,
+         total NUMERIC(12,2) NOT NULL DEFAULT 0,
+         status TEXT NOT NULL DEFAULT 'pending'
+           CHECK (status IN ('pending','paid','fulfilled','cancelled','refunded')),
+         address JSONB NOT NULL DEFAULT '{}'::jsonb,
+         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+       )`,
+
+      // ORDER ITEMS (pro Haendler -> Split moeglich)
+      `CREATE TABLE IF NOT EXISTS order_items (
+         id BIGSERIAL PRIMARY KEY,
+         order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+         product_id ${PRODUCT_ID} REFERENCES products(id) ON DELETE SET NULL,
+         shop_id ${SHOP_ID} REFERENCES shops(id) ON DELETE SET NULL,
+         merchant_id BIGINT REFERENCES merchants(id) ON DELETE SET NULL,
+         title TEXT,
+         qty INTEGER NOT NULL DEFAULT 1,
+         unit_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+         line_total NUMERIC(12,2) NOT NULL DEFAULT 0,
+         commission_rate NUMERIC(5,4) NOT NULL DEFAULT 0,
+         commission_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+         payout_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+         payout_status TEXT NOT NULL DEFAULT 'pending'
+           CHECK (payout_status IN ('pending','paid','failed','reversed')),
+         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+       )`,
+
+      // PAYMENTS (Inkasso)
+      `CREATE TABLE IF NOT EXISTS payments (
+         id BIGSERIAL PRIMARY KEY,
+         order_id BIGINT REFERENCES orders(id) ON DELETE SET NULL,
+         provider TEXT NOT NULL CHECK (provider IN ('stripe','flutterwave','payoneer')),
+         provider_payment_id TEXT NOT NULL,
+         amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+         currency TEXT NOT NULL DEFAULT 'USD',
+         status TEXT NOT NULL DEFAULT 'pending'
+           CHECK (status IN ('pending','succeeded','failed','refunded')),
+         method TEXT,
+         raw JSONB NOT NULL DEFAULT '{}'::jsonb,
+         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+         updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+         UNIQUE (provider, provider_payment_id)
+       )`,
+
+      // PAYOUTS (an Haendler)
+      `CREATE TABLE IF NOT EXISTS payouts (
+         id BIGSERIAL PRIMARY KEY,
+         merchant_id BIGINT REFERENCES merchants(id) ON DELETE SET NULL,
+         order_id BIGINT REFERENCES orders(id) ON DELETE SET NULL,
+         provider TEXT NOT NULL CHECK (provider IN ('stripe','flutterwave','payoneer')),
+         provider_payout_id TEXT,
+         amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+         currency TEXT NOT NULL DEFAULT 'USD',
+         status TEXT NOT NULL DEFAULT 'pending'
+           CHECK (status IN ('pending','paid','failed','reversed')),
+         kind TEXT NOT NULL DEFAULT 'auto_split'
+           CHECK (kind IN ('auto_split','mass_payout','connect','manual')),
+         raw JSONB NOT NULL DEFAULT '{}'::jsonb,
+         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+         updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+         UNIQUE (provider, provider_payout_id)
+       )`,
+
+      // DISPUTES
+      `CREATE TABLE IF NOT EXISTS disputes (
+         id BIGSERIAL PRIMARY KEY,
+         payment_id BIGINT REFERENCES payments(id) ON DELETE SET NULL,
+         order_id BIGINT REFERENCES orders(id) ON DELETE SET NULL,
+         provider TEXT NOT NULL CHECK (provider IN ('stripe','flutterwave','payoneer')),
+         provider_dispute_id TEXT NOT NULL,
+         amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+         currency TEXT NOT NULL DEFAULT 'USD',
+         status TEXT NOT NULL DEFAULT 'open',
+         reason TEXT,
+         raw JSONB NOT NULL DEFAULT '{}'::jsonb,
+         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+         updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+         UNIQUE (provider, provider_dispute_id)
+       )`,
+
+      // WEBHOOK EVENTS (Idempotenz)
+      `CREATE TABLE IF NOT EXISTS webhook_events (
+         id BIGSERIAL PRIMARY KEY,
+         provider TEXT NOT NULL,
+         provider_event_id TEXT NOT NULL,
+         type TEXT,
+         payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+         processed_at TIMESTAMPTZ,
+         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+         UNIQUE (provider, provider_event_id)
+       )`,
+
+      // INDIZES
+      `CREATE INDEX IF NOT EXISTS idx_provider_accounts_merchant ON provider_accounts (merchant_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_subscriptions_merchant ON subscriptions (merchant_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items (order_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_order_items_merchant ON order_items (merchant_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_payments_order ON payments (order_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_payouts_merchant ON payouts (merchant_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_disputes_order ON disputes (order_id)`,
+    ];
+
+    for (const sql of stmts) {
+      await query(sql);
+      const m = sql.match(/(?:TABLE|INDEX) IF NOT EXISTS ([a-z_]+)/i);
+      log.push('ok: ' + (m ? m[1] : sql.slice(0, 40)));
+    }
+
+    res.json({ ok: true, message: 'Billing-Schema bereit', log });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message, log });
+  }
+});
 // ── ONE-TIME CATEGORY SEED ────────────────────────────────────
 // Call once: GET /api/seed-categories?secret=YOUR_MIGRATION_SECRET
 app.get('/api/seed-categories', async (req, res) => {
