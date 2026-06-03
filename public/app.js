@@ -3588,6 +3588,14 @@ route('seller-dashboard', async function () {
   // Module-Definitionen — neue Module hier auf active:true setzen,
   // sobald die zugehörige Route gebaut ist.
   const modules = [
+     {
+      icon: '\uD83D\uDCB3',
+      title: ({ de: 'Abo & Mitgliedschaft', en: 'Subscription', fr: 'Abonnement', pt: 'Subscri\u00e7\u00e3o', sw: 'Usajili' }[S.lang] || 'Subscription'),
+      desc: ({ de: 'Plan w\u00e4hlen, Status & Abo verwalten', en: 'Choose plan, manage status & subscription', fr: 'Choisir un forfait, g\u00e9rer l\u2019abonnement', pt: 'Escolher plano, gerir subscri\u00e7\u00e3o', sw: 'Chagua mpango, dhibiti usajili' }[S.lang] || 'Manage your subscription'),
+      target: 'seller-billing',
+      active: true,
+      stat: null
+    },
     {
       icon: '📦',
       title: t('seller_hub.mod_products_t'),
@@ -3690,7 +3698,135 @@ route('seller-dashboard', async function () {
   h += '</section></div>';
   $('content').innerHTML = h;
 });
+/* ============================================================
+   PHASE 1 - FRONTEND : ABO / MITGLIEDSCHAFT
+   EINFUEGEN in app.js direkt NACH dem Block:
+     route('seller-dashboard', async function () { ... });
+   (also vor  route('seller-shop', ...) )
+   ============================================================ */
 
+/* ---------- ROUTE: SELLER BILLING (Abo) ---------- */
+route('seller-billing', async function () {
+  if (!S.user || (S.user.role !== 'seller' && S.user.role !== 'dealer' && S.user.role !== 'admin')) { render('login'); return; }
+
+  var L = {
+    de: { title: 'Abo & Mitgliedschaft', sub: 'Waehle deinen Plan. Dein Shop ist nur mit aktivem Abo freigeschaltet.',
+          current: 'Dein aktueller Plan', status: 'Status', limit: 'Produktlimit', products_word: 'Produkte',
+          none: 'Du hast noch kein aktives Abo.', choose: 'Plan waehlen', per_month: 'pro Monat',
+          subscribe: 'Abonnieren', manage: 'Abo verwalten', back: '< Zurueck zum Dashboard',
+          loading: 'Laedt …', active: 'AKTIV', basic_feat: 'Bis zu 10 Produkte', pro_feat: 'Bis zu 100 Produkte',
+          err: 'Etwas ist schiefgelaufen. Bitte erneut versuchen.' },
+    en: { title: 'Subscription & Membership', sub: 'Choose your plan. Your shop is only unlocked with an active subscription.',
+          current: 'Your current plan', status: 'Status', limit: 'Product limit', products_word: 'products',
+          none: 'You do not have an active subscription yet.', choose: 'Choose a plan', per_month: 'per month',
+          subscribe: 'Subscribe', manage: 'Manage subscription', back: '< Back to dashboard',
+          loading: 'Loading …', active: 'ACTIVE', basic_feat: 'Up to 10 products', pro_feat: 'Up to 100 products',
+          err: 'Something went wrong. Please try again.' },
+    fr: { title: 'Abonnement', sub: 'Choisissez votre forfait. Votre boutique n\u2019est active qu\u2019avec un abonnement actif.',
+          current: 'Votre forfait actuel', status: 'Statut', limit: 'Limite de produits', products_word: 'produits',
+          none: 'Vous n\u2019avez pas encore d\u2019abonnement actif.', choose: 'Choisir un forfait', per_month: 'par mois',
+          subscribe: 'S\u2019abonner', manage: 'G\u00e9rer l\u2019abonnement', back: '< Retour au tableau de bord',
+          loading: 'Chargement …', active: 'ACTIF', basic_feat: 'Jusqu\u2019\u00e0 10 produits', pro_feat: 'Jusqu\u2019\u00e0 100 produits',
+          err: 'Une erreur est survenue. R\u00e9essayez.' },
+    pt: { title: 'Subscri\u00e7\u00e3o', sub: 'Escolha o seu plano. A sua loja s\u00f3 fica ativa com uma subscri\u00e7\u00e3o ativa.',
+          current: 'O seu plano atual', status: 'Estado', limit: 'Limite de produtos', products_word: 'produtos',
+          none: 'Ainda n\u00e3o tem uma subscri\u00e7\u00e3o ativa.', choose: 'Escolher plano', per_month: 'por m\u00eas',
+          subscribe: 'Subscrever', manage: 'Gerir subscri\u00e7\u00e3o', back: '< Voltar ao painel',
+          loading: 'A carregar …', active: 'ATIVO', basic_feat: 'At\u00e9 10 produtos', pro_feat: 'At\u00e9 100 produtos',
+          err: 'Algo correu mal. Tente novamente.' },
+    sw: { title: 'Usajili', sub: 'Chagua mpango wako. Duka lako linafunguliwa tu ukiwa na usajili hai.',
+          current: 'Mpango wako wa sasa', status: 'Hali', limit: 'Kikomo cha bidhaa', products_word: 'bidhaa',
+          none: 'Bado huna usajili hai.', choose: 'Chagua mpango', per_month: 'kwa mwezi',
+          subscribe: 'Jisajili', manage: 'Dhibiti usajili', back: '< Rudi kwenye dashibodi',
+          loading: 'Inapakia …', active: 'HAI', basic_feat: 'Hadi bidhaa 10', pro_feat: 'Hadi bidhaa 100',
+          err: 'Hitilafu imetokea. Jaribu tena.' }
+  };
+  var x = L[S.lang] || L.en;
+
+  // Geruest mit Lade-Hinweis sofort rendern
+  var head = '<div class="page-wrap"><section class="section">'
+    + '<div class="sec-hd" style="margin-bottom:1rem"><div class="sec-title">\uD83D\uDCB3 ' + esc(x.title) + '</div></div>'
+    + '<div style="opacity:.75;font-size:.9rem;margin-bottom:1.5rem">' + esc(x.sub) + '</div>';
+  $('content').innerHTML = head + '<div style="opacity:.6">' + esc(x.loading) + '</div></section></div>';
+
+  // Status laden
+  var st = null;
+  try {
+    st = await apiReq('/billing/status', 'GET', null, true);
+  } catch (e) {
+    $('content').innerHTML = head + '<div style="color:#dc2626">' + esc(x.err) + '</div>'
+      + '<div style="margin-top:1.5rem"><a href="#" onclick="render(\'seller-dashboard\');return false">' + esc(x.back) + '</a></div>'
+      + '</section></div>';
+    return;
+  }
+
+  var h = head;
+
+  // Aktueller Status
+  if (st && st.hasAccess) {
+    var planName = (st.plan === 'pro') ? 'Pro' : 'Basic';
+    h += '<div style="margin-bottom:1.75rem;padding:1.1rem 1.25rem;background:var(--surface2);border-radius:10px;border-left:4px solid #16a34a">';
+    h += '<div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem">';
+    h += '<span style="font-weight:700;font-size:1.05rem">' + esc(x.current) + ': ' + planName + '</span>';
+    h += '<span style="padding:.15rem .5rem;background:#16a34a;color:#fff;font-size:.65rem;border-radius:4px;font-weight:700;letter-spacing:.5px">' + esc(x.active) + '</span>';
+    h += '</div>';
+    h += '<div style="font-size:.88rem;opacity:.8">' + esc(x.limit) + ': ' + (st.productLimit || 0) + ' ' + esc(x.products_word) + ' \u00b7 ' + esc(x.status) + ': ' + esc(st.status || '') + '</div>';
+    h += '<div style="margin-top:.9rem"><button class="btn" onclick="sellerBillingPortal(this)" style="padding:.55rem 1rem;background:var(--a300);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer">' + esc(x.manage) + '</button></div>';
+    h += '</div>';
+  } else {
+    h += '<div style="margin-bottom:1.75rem;padding:1rem 1.25rem;background:var(--surface2);border-radius:10px;border-left:4px solid #f59e0b;font-size:.92rem">' + esc(x.none) + '</div>';
+  }
+
+  // Plan-Karten
+  function planCard(plan, name, feat, current) {
+    var isCurrent = current && st && st.hasAccess && st.plan === plan;
+    var s = '<div style="padding:1.4rem;background:var(--surface2);border:2px solid ' + (isCurrent ? '#16a34a' : 'transparent') + ';border-radius:12px;display:flex;flex-direction:column;gap:.6rem">';
+    s += '<div style="font-weight:800;font-size:1.2rem">' + esc(name) + '</div>';
+    s += '<div style="font-size:.88rem;opacity:.8">' + esc(feat) + '</div>';
+    s += '<div style="margin-top:auto;padding-top:.8rem">';
+    if (isCurrent) {
+      s += '<button class="btn" disabled style="width:100%;padding:.6rem;background:#16a34a;color:#fff;border:none;border-radius:8px;font-weight:700;opacity:.7;cursor:default">\u2713 ' + esc(x.active) + '</button>';
+    } else {
+      s += '<button class="btn" onclick="sellerSubscribe(\'' + plan + '\',this)" style="width:100%;padding:.6rem;background:var(--a300);color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer">' + esc(x.subscribe) + '</button>';
+    }
+    s += '</div></div>';
+    return s;
+  }
+
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1rem;margin-bottom:1.75rem">';
+  h += planCard('basic', 'Basic', x.basic_feat, true);
+  h += planCard('pro', 'Pro', x.pro_feat, true);
+  h += '</div>';
+
+  h += '<div><a href="#" onclick="render(\'seller-dashboard\');return false">' + esc(x.back) + '</a></div>';
+  h += '</section></div>';
+  $('content').innerHTML = h;
+});
+
+/* Globale Helfer: Abo starten / Kundenportal oeffnen (leiten zu Stripe weiter) */
+async function sellerSubscribe(plan, btn) {
+  try {
+    if (btn) { btn.disabled = true; btn.style.opacity = '.6'; }
+    var d = await apiReq('/billing/subscribe', 'POST', { plan: plan }, true);
+    if (d && d.url) { location.href = d.url; return; }
+    throw new Error('keine URL');
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    alert((e && e.message) ? e.message : 'Fehler');
+  }
+}
+
+async function sellerBillingPortal(btn) {
+  try {
+    if (btn) { btn.disabled = true; btn.style.opacity = '.6'; }
+    var d = await apiReq('/billing/portal', 'POST', {}, true);
+    if (d && d.url) { location.href = d.url; return; }
+    throw new Error('keine URL');
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    alert((e && e.message) ? e.message : 'Fehler');
+  }
+}
 /* ---------- ROUTE: SELLER SHOP (Mein Shop) ---------- */
 route('seller-shop', async function () {
   if (!S.user || (S.user.role !== 'seller' && S.user.role !== 'dealer' && S.user.role !== 'admin')) { render('login'); return; }
