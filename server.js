@@ -23,6 +23,89 @@ const { signAccessToken, verifyAccessToken } = require('./auth');
 const { autoFillTranslations } = require('./translator');
 
 const app = express();
+// ============================================================
+//  PHASE 1 - BLOCK W : STRIPE WEBHOOK  (RAW BODY!)
+//  EINFUEGEN direkt NACH:  const app = express();   (ca. Zeile 24)
+//  und VOR:  app.use(express.json(...));            (ca. Zeile 52)
+//  Grund: Stripe verlangt den ROHEN Body zur Signaturpruefung.
+// ============================================================
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  try {
+    const evt = await payments.ingestWebhook('stripe', {
+      rawBody: req.body,        // Buffer dank express.raw
+      headers: req.headers,
+    });
+
+    // Duplikat (Retry) -> still bestaetigen
+    if (!evt) return res.json({ received: true, duplicate: true });
+
+    if (evt.kind === 'subscription') {
+      await handleStripeSubscriptionEvent(evt);
+    }
+
+    await payments.markWebhookDone('stripe', evt.eventId);
+    res.json({ received: true });
+  } catch (err) {
+    console.error('[stripe webhook]', err.message);
+    // 400 -> Stripe weiss, dass es nicht erfolgreich war
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Spiegelt Stripe-Abo-Events in die eigene subscriptions-Tabelle.
+async function handleStripeSubscriptionEvent(evt) {
+  const d = evt.data || {};
+  const PLAN_LIMIT = { basic: 10, pro: 100 };
+
+  if (d.action === 'checkout_completed') {
+    if (d.providerSubscriptionId && d.merchantId) {
+      await billingDb.upsertSubscription({
+        merchantId: d.merchantId,
+        provider: 'stripe',
+        plan: d.plan || 'basic',
+        productLimit: PLAN_LIMIT[d.plan] || 0,
+        status: 'active',
+        providerSubscriptionId: d.providerSubscriptionId,
+        currentPeriodEnd: null,
+        cancelAtPeriodEnd: false,
+      });
+    }
+    return;
+  }
+
+  if (d.action === 'sub_updated') {
+    if (!d.providerSubscriptionId) return;
+    const updated = await billingDb.setSubscriptionStatusByProviderId(
+      'stripe', d.providerSubscriptionId, d.status, d.currentPeriodEnd
+    );
+    // Falls der Datensatz noch nicht existiert: anlegen (Merchant aus metadata)
+    if (!updated && d.merchantId) {
+      await billingDb.upsertSubscription({
+        merchantId: d.merchantId,
+        provider: 'stripe',
+        plan: d.plan || 'basic',
+        productLimit: PLAN_LIMIT[d.plan] || 0,
+        status: d.status,
+        providerSubscriptionId: d.providerSubscriptionId,
+        currentPeriodEnd: d.currentPeriodEnd,
+        cancelAtPeriodEnd: d.cancelAtPeriodEnd,
+      });
+    }
+    return;
+  }
+
+  if (d.action === 'sub_canceled') {
+    await billingDb.setSubscriptionStatusByProviderId('stripe', d.providerSubscriptionId, 'canceled', null);
+    return;
+  }
+
+  if (d.action === 'payment_failed') {
+    if (d.providerSubscriptionId) {
+      await billingDb.setSubscriptionStatusByProviderId('stripe', d.providerSubscriptionId, 'past_due', null);
+    }
+    return;
+  }
+}
 
 // WICHTIG für Render/Heroku/etc: Trust X-Forwarded-Proto, sonst sind upload URLs http:// statt https:// (Mixed Content!)
 app.set('trust proxy', true);
@@ -706,7 +789,107 @@ app.get('/api/seed-autodoc', async (req, res) => {
   }
 });
 
+// ============================================================
+//  PHASE 1 - BLOCK B : BILLING-ENDPOINTS (Haendler-Abo)
+//  EINFUEGEN irgendwo bei deinen anderen app.get/app.post-Routen,
+//  z. B. direkt OBERHALB von app.get('/api/seed-categories', ...).
+//  Nutzt den globalen JSON-Parser (normal) und requireAuth (bereits definiert).
+// ============================================================
 
+// Nur Haendler (oder Admin) duerfen Abo-Aktionen ausfuehren.
+function requireSeller(req, res, next) {
+  requireAuth(req, res, () => {
+    if (!req.user || (req.user.role !== 'seller' && req.user.role !== 'admin')) {
+      return res.status(403).json({ error: 'Nur fuer Haendler' });
+    }
+    next();
+  });
+}
+
+const PLAN_LIMITS = { basic: 10, pro: 100 };
+const APP_BASE_URL = process.env.PUBLIC_BASE_URL || 'https://afcarparts.com';
+
+// Abo starten -> liefert gehostete Stripe-Checkout-URL zurueck
+app.post('/api/billing/subscribe', requireSeller, async (req, res) => {
+  try {
+    const plan = String((req.body && req.body.plan) || '').toLowerCase();
+    if (!PLAN_LIMITS[plan]) return res.status(400).json({ error: 'Ungueltiger Plan (basic|pro)' });
+
+    const merchant = await billingDb.ensureMerchant(req.user.id);
+    const stripe = payments.getProvider('stripe');
+    const customerId = await stripe.ensureCustomer({
+      merchant, email: req.user.email, name: req.user.name,
+    });
+
+    const url = await stripe.createSubscriptionCheckout({
+      merchant, plan, customerId,
+      successUrl: `${APP_BASE_URL}/seller-dashboard.html?abo=success`,
+      cancelUrl: `${APP_BASE_URL}/seller-dashboard.html?abo=cancel`,
+    });
+    res.json({ url });
+  } catch (err) {
+    console.error('[billing/subscribe]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Stripe-Kundenportal (verwalten / kuendigen)
+app.post('/api/billing/portal', requireSeller, async (req, res) => {
+  try {
+    const merchant = await billingDb.getMerchantByUserId(req.user.id);
+    if (!merchant) return res.status(404).json({ error: 'Kein Haendlerkonto' });
+    const acct = await billingDb.getProviderAccount(merchant.id, 'stripe', 'customer');
+    if (!acct || !acct.external_id) return res.status(400).json({ error: 'Kein Stripe-Kunde vorhanden' });
+
+    const stripe = payments.getProvider('stripe');
+    const url = await stripe.createBillingPortal({
+      customerId: acct.external_id,
+      returnUrl: `${APP_BASE_URL}/seller-dashboard.html`,
+    });
+    res.json({ url });
+  } catch (err) {
+    console.error('[billing/portal]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Abo-Status (fuer Dashboard-Anzeige und Zugangslogik)
+app.get('/api/billing/status', requireSeller, async (req, res) => {
+  try {
+    const merchant = await billingDb.ensureMerchant(req.user.id);
+    const sub = await billingDb.getActiveSubscription(merchant.id);
+    res.json({
+      hasAccess: !!sub,
+      plan: sub ? sub.plan : null,
+      productLimit: sub ? sub.product_limit : 0,
+      status: sub ? sub.status : 'none',
+      currentPeriodEnd: sub ? sub.current_period_end : null,
+      cancelAtPeriodEnd: sub ? sub.cancel_at_period_end : false,
+    });
+  } catch (err) {
+    console.error('[billing/status]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Gate-Middleware fuer kuenftige Haendler-Routen: nur mit aktivem Abo.
+// Verwendung spaeter z. B.:  app.post('/api/seller/products', requireActiveSubscription, ...)
+async function requireActiveSubscription(req, res, next) {
+  requireSeller(req, res, async () => {
+    try {
+      if (req.user.role === 'admin') return next(); // Admin immer durch
+      const merchant = await billingDb.getMerchantByUserId(req.user.id);
+      const sub = merchant ? await billingDb.getActiveSubscription(merchant.id) : null;
+      if (!sub) {
+        return res.status(402).json({ error: 'Aktives Abo erforderlich', code: 'NO_ACTIVE_SUBSCRIPTION' });
+      }
+      req.subscription = sub;
+      next();
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+}
 // ════════════════════════════════════════════════════════════════════
 // AFCARPARTS FULL RESET & SEED  (May 2026)
 // GET /api/seed-afcarparts-categories?secret=YOUR_MIGRATION_SECRET
