@@ -77,22 +77,22 @@ function subscriptionProvider() {
    Die fachliche Verarbeitung (Abo-Status, Payout-Status ...) folgt
    in den jeweiligen Phasen.
    ------------------------------------------------------------ */
-async function ingestWebhook(providerName, { rawBody, headers, parsedBody }) {
+async function ingestWebhook(providerName, { rawBody, headers }) {
   const provider = getProvider(providerName);
 
-  // 1. Signatur pruefen (wirft bei Manipulation)
-  provider.verifyWebhook({ rawBody, headers });
+  // 1. Signatur pruefen -> liefert das verifizierte, native Provider-Event (wirft bei Manipulation)
+  const verifiedEvent = provider.verifyWebhook({ rawBody, headers });
 
   // 2. Normalisieren
-  const evt = provider.parseWebhook(parsedBody || JSON.parse(rawBody));
+  const evt = provider.parseWebhook(verifiedEvent);
   if (!evt || !evt.eventId) throw new Error(`[${providerName}] Webhook ohne eventId`);
 
-  // 3. Idempotenz
+  // 3. Idempotenz (Doppel-Retries werden ignoriert); Roh-Event fuer Audit speichern
   const { isNew } = await billingDb.recordEvent({
     provider: providerName,
     eventId: evt.eventId,
     type: evt.type,
-    payload: parsedBody || {},
+    payload: verifiedEvent || {},
   });
   if (!isNew) return null; // bereits gesehen -> ignorieren
 
