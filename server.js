@@ -799,7 +799,7 @@ app.get('/api/seed-autodoc', async (req, res) => {
 // Nur Haendler (oder Admin) duerfen Abo-Aktionen ausfuehren.
 function requireSeller(req, res, next) {
   requireAuth(req, res, () => {
-    if (!req.user || (req.user.role !== 'seller' && req.user.role !== 'admin')) {
+   if (!req.user || !['dealer', 'seller', 'admin'].includes(req.user.role)) {
       return res.status(403).json({ error: 'Nur fuer Haendler' });
     }
     next();
