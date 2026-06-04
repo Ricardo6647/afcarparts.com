@@ -16,9 +16,10 @@ const billingDb = require('../billingDb');
    gibt es eine klare Fehlermeldung statt eines stillen No-Ops.
    ------------------------------------------------------------ */
 const REGISTRY = {
-  stripe:      './stripe',      // Phase 1
-  flutterwave: './flutterwave', // Phase 2
-  payoneer:    './payoneer',    // Phase 3
+  stripe:      './stripe',      // Phase 1 (Abo)
+  paystack:    './paystack',    // Phase 2 (Afrika: Inkasso + Split)
+  flutterwave: './flutterwave', // Alternative (ungenutzt)
+  payoneer:    './payoneer',    // Phase 3 (China)
 };
 
 const _cache = {};
@@ -47,20 +48,20 @@ function getProvider(name) {
 const SUBSCRIPTION_PROVIDER = 'stripe';
 
 // Fluss 2b: Auszahlung an Haendler nach Haendler-Land.
-const AFRICA_FLW = ['NG', 'GH', 'KE', 'ZA', 'CI', 'UG', 'TZ', 'RW', 'CM', 'SN'];
+const AFRICA_PAYSTACK = ['NG', 'GH', 'KE', 'ZA', 'CI'];
 const CHINA_PAYONEER = ['CN', 'HK'];
 
 function pickPayoutProvider(merchantCountry) {
   const c = String(merchantCountry || '').toUpperCase();
   if (CHINA_PAYONEER.includes(c)) return 'payoneer';
-  if (AFRICA_FLW.includes(c)) return 'flutterwave';
+  if (AFRICA_PAYSTACK.includes(c)) return 'paystack';
   return 'stripe'; // EU/global -> Stripe Connect (Phase 4)
 }
 
-// Fluss 2a: Inkasso nach Kunden-Land (afrikanische Karten/Mobile Money -> Flutterwave).
+// Fluss 2a: Inkasso nach Kunden-Land (afrikanische Karten/Mobile Money -> Paystack).
 function pickCollectionProvider(customerCountry) {
   const c = String(customerCountry || '').toUpperCase();
-  if (AFRICA_FLW.includes(c)) return 'flutterwave';
+  if (AFRICA_PAYSTACK.includes(c)) return 'paystack';
   return 'stripe';
 }
 
@@ -111,5 +112,5 @@ module.exports = {
   ingestWebhook,
   markWebhookDone,
   // Konstanten exportiert fuer Tests/Transparenz
-  _routing: { SUBSCRIPTION_PROVIDER, AFRICA_FLW, CHINA_PAYONEER },
+  _routing: { SUBSCRIPTION_PROVIDER, AFRICA_PAYSTACK, CHINA_PAYONEER },
 };
