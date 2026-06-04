@@ -2781,20 +2781,155 @@ app.get('/api/banners', (req, res) => {
   res.json({ data: active });
 });
 
-app.get('/api/orders', (req, res) => res.json({ data: load('orders') }));
+// ============================================================
+//  PHASE 2.0 - BESTELLUNGEN -> POSTGRES (provider-neutral)
+//  ERSETZT deine bisherigen JSON-Order-Endpoints:
+//    - GET  /api/orders            (war: load('orders'))
+//    - POST /api/orders            (war: save in JSON)
+//    - GET  /api/admin/orders      (war: load('orders'))
+//
+//  WICHTIG: Preis kommt jetzt SERVERSEITIG aus products.price_usd,
+//  nicht mehr vom Client. Pro Position werden 16 % Provision berechnet.
+// ============================================================
 
-app.post('/api/orders', (req, res) => {
-  const { items, shipping, payment, address, user } = req.body || {};
-  if (!items || !Array.isArray(items) || !items.length) return res.status(400).json({ error: 'No items' });
-  const orders = load('orders');
-  const order = {
-    id: Date.now().toString(),
-    items, shipping, payment, address, user,
-    status: 'pending', created_at: new Date().toISOString()
-  };
-  orders.push(order);
-  save('orders', orders);
-  res.json({ success: true, order });
+// Provision (16 %). Bei Bedarf via Render-ENV COMMISSION_RATE ueberschreibbar.
+const COMMISSION_RATE = (() => {
+  const v = parseFloat(process.env.COMMISSION_RATE);
+  return Number.isFinite(v) && v >= 0 && v < 1 ? v : 0.16;
+})();
+const SALE_CURRENCY = process.env.SALE_CURRENCY || 'USD';
+
+function money(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+
+// ---- POST /api/orders : Bestellung anlegen (Status 'pending') ----
+app.post('/api/orders', async (req, res) => {
+  try {
+    const { items, shipping, address, user } = req.body || {};
+    if (!Array.isArray(items) || !items.length) return res.status(400).json({ error: 'No items' });
+
+    // Nur id + qty vom Client uebernehmen; alles andere kommt aus der DB.
+    const wanted = [];
+    for (const it of items) {
+      const pid = parseInt(it && (it.id != null ? it.id : it.product_id), 10);
+      const qty = Math.max(1, parseInt(it && it.qty, 10) || 1);
+      if (pid) wanted.push({ pid, qty });
+    }
+    if (!wanted.length) return res.status(400).json({ error: 'No valid items' });
+
+    // Positionen serverseitig aufbauen
+    const lines = [];
+    let subtotal = 0;
+    for (const w of wanted) {
+      const pr = await query(
+        `SELECT p.id, p.price_usd, p.seller_id, p.shop_id, p.stock, p.is_china_seller, p.default_lang,
+                (SELECT title FROM product_translations
+                   WHERE product_id = p.id ORDER BY (lang = p.default_lang) DESC LIMIT 1) AS title
+           FROM products p
+          WHERE p.id = $1 AND p.active = true`,
+        [w.pid]
+      );
+      const p = pr.rows[0];
+      if (!p) continue; // unbekanntes/inaktives Produkt -> ueberspringen
+
+      const unitPrice = money(p.price_usd);
+      const lineTotal = money(unitPrice * w.qty);
+      const commission = money(lineTotal * COMMISSION_RATE);
+      const payout = money(lineTotal - commission);
+
+      // Haendler ermitteln (falls Produkt einem Verkaeufer gehoert)
+      let merchantId = null;
+      if (p.seller_id) {
+        const m = await billingDb.ensureMerchant(p.seller_id);
+        merchantId = m ? m.id : null;
+      }
+
+      subtotal = money(subtotal + lineTotal);
+      lines.push({
+        productId: p.id, shopId: p.shop_id || null, merchantId,
+        title: p.title || ('#' + p.id), qty: w.qty,
+        unitPrice, lineTotal, commission, payout,
+      });
+    }
+    if (!lines.length) return res.status(400).json({ error: 'No purchasable items' });
+
+    const shipCost = money((shipping && !isNaN(parseFloat(shipping))) ? parseFloat(shipping) : 0);
+    const total = money(subtotal + shipCost);
+
+    const buyerUserId = (user && user.id && !isNaN(parseInt(user.id, 10))) ? parseInt(user.id, 10) : null;
+    const email = (user && user.email) || (address && address.email) || null;
+
+    // Header anlegen
+    const order = await billingDb.createOrder({
+      buyerUserId, email, currency: SALE_CURRENCY,
+      subtotal, shipping: shipCost, total, status: 'pending',
+      address: address || {},
+    });
+
+    // Positionen anlegen
+    for (const ln of lines) {
+      await billingDb.addOrderItem({
+        orderId: order.id, productId: ln.productId, shopId: ln.shopId, merchantId: ln.merchantId,
+        title: ln.title, qty: ln.qty, unitPrice: ln.unitPrice, lineTotal: ln.lineTotal,
+        commissionRate: COMMISSION_RATE, commissionAmount: ln.commission, payoutAmount: ln.payout,
+      });
+    }
+
+    res.json({
+      success: true,
+      order: {
+        id: order.id, currency: order.currency,
+        subtotal, shipping: shipCost, total, status: order.status,
+        items: lines.map(l => ({ product_id: l.productId, title: l.title, qty: l.qty, unit_price: l.unitPrice, line_total: l.lineTotal })),
+      },
+    });
+  } catch (err) {
+    console.error('[orders:create]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- GET /api/orders : eigene Bestellungen (nur eingeloggt) ----
+app.get('/api/orders', requireAuth, async (req, res) => {
+  try {
+    const r = await query(
+      `SELECT id, currency, subtotal, shipping, total, status, created_at
+         FROM orders
+        WHERE buyer_user_id = $1
+        ORDER BY created_at DESC
+        LIMIT 100`,
+      [req.user.id]
+    );
+    res.json({ data: r.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- GET /api/admin/orders : alle Bestellungen + Positionen ----
+app.get('/api/admin/orders', requireAdmin, async (req, res) => {
+  try {
+    const r = await query(
+      `SELECT o.id, o.email, o.currency, o.subtotal, o.shipping, o.total, o.status,
+              o.address, o.created_at,
+              COALESCE(json_agg(
+                json_build_object(
+                  'id', oi.id, 'title', oi.title, 'qty', oi.qty,
+                  'unit_price', oi.unit_price, 'line_total', oi.line_total,
+                  'merchant_id', oi.merchant_id, 'shop_id', oi.shop_id,
+                  'commission_amount', oi.commission_amount, 'payout_amount', oi.payout_amount,
+                  'payout_status', oi.payout_status
+                ) ORDER BY oi.id
+              ) FILTER (WHERE oi.id IS NOT NULL), '[]') AS items
+         FROM orders o
+         LEFT JOIN order_items oi ON oi.order_id = o.id
+        GROUP BY o.id
+        ORDER BY o.created_at DESC
+        LIMIT 200`
+    );
+    res.json({ data: r.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 /* ============================================================
@@ -2892,7 +3027,7 @@ app.delete('/api/admin/banners/:id', requireAdmin, (req, res) => {
   res.json({ success: true, deleted: before - banners.length });
 });
 
-app.get('/api/admin/orders', requireAdmin, (req, res) => res.json({ data: load('orders') }));
+
 
 
 /* ════════════════════════════════════════════════════════════════════
