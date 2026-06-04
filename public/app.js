@@ -3591,6 +3591,14 @@ route('seller-dashboard', async function () {
       active: true,
       stat: null
     },
+     {
+      icon: '\uD83C\uDFE6',
+      title: ({ de: 'Auszahlungskonto', en: 'Payout account', fr: 'Compte de versement', pt: 'Conta de pagamento', sw: 'Akaunti ya malipo' }[S.lang] || 'Payout account'),
+      desc: ({ de: 'Bankverbindung f\u00fcr deine Verkaufserl\u00f6se', en: 'Bank details for your payouts', fr: 'Coordonn\u00e9es bancaires pour vos versements', pt: 'Dados banc\u00e1rios para os seus pagamentos', sw: 'Maelezo ya benki kwa malipo yako' }[S.lang] || 'Bank details for payouts'),
+      target: 'seller-payout',
+      active: true,
+      stat: null
+    },
     {
       icon: '📦',
       title: t('seller_hub.mod_products_t'),
@@ -3820,6 +3828,133 @@ async function sellerBillingPortal(btn) {
   } catch (e) {
     if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
     alert((e && e.message) ? e.message : 'Fehler');
+  }
+}
+/* ============================================================
+   PHASE 2.1b - FRONTEND : AUSZAHLUNGSKONTO (Paystack Subaccount)
+   EINFUEGEN in app.js direkt NACH dem Block:
+     route('seller-billing', async function () { ... });
+     ... (inkl. der Helfer sellerSubscribe / sellerBillingPortal)
+   ============================================================ */
+
+/* ---------- ROUTE: SELLER PAYOUT (Auszahlungskonto) ---------- */
+route('seller-payout', async function () {
+  if (!S.user || (S.user.role !== 'seller' && S.user.role !== 'dealer' && S.user.role !== 'admin')) { render('login'); return; }
+
+  var L = {
+    de: { title: 'Auszahlungskonto', sub: 'Hinterlege deine Bankverbindung. Daran zahlen wir deinen Verkaufsanteil aus (abzgl. Provision).',
+          connected: 'Auszahlungskonto verbunden', country: 'Land', bank: 'Bank', account: 'Kontonummer',
+          bizname: 'Geschaeftsname (optional)', save: 'Konto verbinden', update: 'Konto aktualisieren',
+          back: '< Zurueck zum Dashboard', loading: 'Laedt …', required: 'Bank und Kontonummer erforderlich',
+          err: 'Fehler', banks_err: 'Banken konnten nicht geladen werden' },
+    en: { title: 'Payout account', sub: 'Add your bank details. We pay your sales share here (minus commission).',
+          connected: 'Payout account connected', country: 'Country', bank: 'Bank', account: 'Account number',
+          bizname: 'Business name (optional)', save: 'Connect account', update: 'Update account',
+          back: '< Back to dashboard', loading: 'Loading …', required: 'Bank and account number required',
+          err: 'Error', banks_err: 'Could not load banks' },
+    fr: { title: 'Compte de versement', sub: 'Ajoutez vos coordonn\u00e9es bancaires. Nous y versons votre part des ventes (moins la commission).',
+          connected: 'Compte de versement connect\u00e9', country: 'Pays', bank: 'Banque', account: 'Num\u00e9ro de compte',
+          bizname: 'Nom commercial (option.)', save: 'Connecter le compte', update: 'Mettre \u00e0 jour',
+          back: '< Retour au tableau de bord', loading: 'Chargement …', required: 'Banque et num\u00e9ro requis',
+          err: 'Erreur', banks_err: 'Impossible de charger les banques' },
+    pt: { title: 'Conta de pagamento', sub: 'Adicione os seus dados banc\u00e1rios. Pagamos aqui a sua parte das vendas (menos comiss\u00e3o).',
+          connected: 'Conta de pagamento ligada', country: 'Pa\u00eds', bank: 'Banco', account: 'N\u00famero de conta',
+          bizname: 'Nome comercial (opcional)', save: 'Ligar conta', update: 'Atualizar conta',
+          back: '< Voltar ao painel', loading: 'A carregar …', required: 'Banco e n\u00famero obrigat\u00f3rios',
+          err: 'Erro', banks_err: 'N\u00e3o foi poss\u00edvel carregar os bancos' },
+    sw: { title: 'Akaunti ya malipo', sub: 'Weka maelezo ya benki yako. Tunalipa sehemu yako ya mauzo hapa (ukiondoa kamisheni).',
+          connected: 'Akaunti ya malipo imeunganishwa', country: 'Nchi', bank: 'Benki', account: 'Nambari ya akaunti',
+          bizname: 'Jina la biashara (hiari)', save: 'Unganisha akaunti', update: 'Sasisha akaunti',
+          back: '< Rudi kwenye dashibodi', loading: 'Inapakia …', required: 'Benki na nambari zinahitajika',
+          err: 'Hitilafu', banks_err: 'Imeshindwa kupakia benki' }
+  };
+  var x = L[S.lang] || L.en;
+
+  var head = '<div class="page-wrap"><section class="section">'
+    + '<div class="sec-hd" style="margin-bottom:1rem"><div class="sec-title">\uD83C\uDFE6 ' + esc(x.title) + '</div></div>'
+    + '<div style="opacity:.75;font-size:.9rem;margin-bottom:1.5rem">' + esc(x.sub) + '</div>';
+  $('content').innerHTML = head + '<div style="opacity:.6">' + esc(x.loading) + '</div></section></div>';
+
+  // aktuellen Status laden
+  var st = null;
+  try { st = await apiReq('/seller/payout-account', 'GET', null, true); } catch (e) {}
+
+  var h = head;
+
+  if (st && st.connected && st.account) {
+    var meta = st.account.meta || {};
+    h += '<div style="margin-bottom:1.5rem;padding:1rem 1.25rem;background:var(--surface2);border-radius:10px;border-left:4px solid #16a34a">';
+    h += '<div style="font-weight:700;margin-bottom:.3rem">\u2713 ' + esc(x.connected) + '</div>';
+    h += '<div style="font-size:.85rem;opacity:.8">' + esc(meta.account_name || '') + ' \u00b7 ' + esc(meta.account_number || '') + '</div>';
+    h += '<div style="font-size:.72rem;opacity:.55;margin-top:.2rem">' + esc(st.account.subaccount_code || '') + '</div>';
+    h += '</div>';
+  }
+
+  // Laenderoptionen (value = Paystack-country-Param)
+  var countries = [
+    ['nigeria', 'Nigeria'], ['ghana', 'Ghana'], ['kenya', 'Kenya'],
+    ['south africa', 'South Africa'], ["cote d'ivoire", "C\u00f4te d'Ivoire"]
+  ];
+  var copts = countries.map(function (c) { return '<option value="' + c[0] + '">' + esc(c[1]) + '</option>'; }).join('');
+
+  var lbl = 'display:block;font-size:.8rem;font-weight:600;margin:.9rem 0 .3rem';
+  var inp = 'width:100%;max-width:420px;padding:.6rem;border:1px solid var(--line,#ccc);border-radius:8px;background:var(--surface,#fff);color:inherit;box-sizing:border-box';
+
+  h += '<div style="max-width:420px">';
+  h += '<label style="' + lbl + '">' + esc(x.country) + '</label>';
+  h += '<select id="po_country" style="' + inp + '" onchange="sellerLoadBanks(this.value)">' + copts + '</select>';
+  h += '<label style="' + lbl + '">' + esc(x.bank) + '</label>';
+  h += '<select id="po_bank" style="' + inp + '"><option>' + esc(x.loading) + '</option></select>';
+  h += '<label style="' + lbl + '">' + esc(x.account) + '</label>';
+  h += '<input id="po_account" style="' + inp + '" inputmode="numeric" placeholder="0000000000">';
+  h += '<label style="' + lbl + '">' + esc(x.bizname) + '</label>';
+  h += '<input id="po_name" style="' + inp + '" value="' + esc((S.user && S.user.name) || '') + '">';
+  h += '<div style="margin-top:1.1rem"><button class="btn" onclick="sellerSavePayout(this)" style="padding:.6rem 1.2rem;background:var(--a300);color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer">' + esc(st && st.connected ? x.update : x.save) + '</button></div>';
+  h += '<div id="po_result" style="margin-top:.9rem;font-size:.9rem"></div>';
+  h += '</div>';
+
+  h += '<div style="margin-top:1.75rem"><a href="#" onclick="render(\'seller-dashboard\');return false">' + esc(x.back) + '</a></div>';
+  h += '</section></div>';
+  $('content').innerHTML = h;
+
+  // Banken fuer das Standardland laden
+  sellerLoadBanks('nigeria');
+});
+
+/* Globale Helfer */
+async function sellerLoadBanks(country) {
+  var sel = document.getElementById('po_bank');
+  if (!sel) return;
+  var loadingTxt = (S.lang === 'de') ? 'Laedt …' : 'Loading …';
+  sel.innerHTML = '<option>' + loadingTxt + '</option>';
+  try {
+    var d = await apiReq('/paystack/banks?country=' + encodeURIComponent(country || 'nigeria'), 'GET', null, true);
+    var banks = (d && d.data) || [];
+    if (!banks.length) { sel.innerHTML = '<option value="">—</option>'; return; }
+    sel.innerHTML = banks.map(function (b) {
+      return '<option value="' + b.code + '">' + (b.name || b.code) + '</option>';
+    }).join('');
+  } catch (e) {
+    sel.innerHTML = '<option value="">' + ((S.lang === 'de') ? 'Fehler beim Laden' : 'Load error') + '</option>';
+  }
+}
+
+async function sellerSavePayout(btn) {
+  var country = (document.getElementById('po_country') || {}).value;
+  var bank = (document.getElementById('po_bank') || {}).value;
+  var acc = ((document.getElementById('po_account') || {}).value || '').trim();
+  var name = ((document.getElementById('po_name') || {}).value || '').trim();
+  var out = document.getElementById('po_result');
+  if (!bank || !acc) { if (out) { out.style.color = '#dc2626'; out.textContent = (S.lang === 'de' ? 'Bank und Kontonummer erforderlich' : 'Bank and account number required'); } return; }
+  try {
+    if (btn) { btn.disabled = true; btn.style.opacity = '.6'; }
+    var d = await apiReq('/seller/payout-account', 'POST',
+      { settlement_bank: bank, account_number: acc, business_name: name || undefined, country: country }, true);
+    if (out) { out.style.color = '#16a34a'; out.textContent = '\u2713 ' + (d.account_name || '') + ' (' + d.subaccount_code + ')'; }
+  } catch (e) {
+    if (out) { out.style.color = '#dc2626'; out.textContent = (e && e.message) ? e.message : 'Fehler'; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
   }
 }
 /* ---------- ROUTE: SELLER SHOP (Mein Shop) ---------- */
