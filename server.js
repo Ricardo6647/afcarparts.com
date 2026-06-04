@@ -704,6 +704,35 @@ app.post('/api/seller/payout-account', requireSeller, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// file: server.js — Block einfügen (Phase 2.1 Fix: provider-CHECK um 'paystack' erweitern)
+// Oberhalb von app.get('/api/seed-categories', ...) platzieren.
+// Einmal aufrufen: GET /api/migrate-add-paystack?secret=MIGRATION_SECRET
+
+/* ============================================================
+   PHASE 2.1 FIX - erlaubt 'paystack' in der provider-Spalte.
+   Die Tabellen wurden in Phase 0 mit CHECK (provider IN
+   ('stripe','flutterwave','payoneer')) angelegt. Wir erweitern
+   die CHECK-Regel um 'paystack'. Idempotent.
+   ============================================================ */
+app.get('/api/migrate-add-paystack', async (req, res) => {
+  if (!process.env.MIGRATION_SECRET) return res.status(503).json({ error: 'MIGRATION_SECRET not set' });
+  if (req.query.secret !== process.env.MIGRATION_SECRET) return res.status(401).json({ error: 'Invalid secret' });
+
+  const log = [];
+  const tables = ['provider_accounts', 'subscriptions', 'payments', 'payouts', 'disputes'];
+  const allowed = "'stripe','paystack','flutterwave','payoneer'";
+
+  try {
+    for (const t of tables) {
+      await query(`ALTER TABLE ${t} DROP CONSTRAINT IF EXISTS ${t}_provider_check`);
+      await query(`ALTER TABLE ${t} ADD CONSTRAINT ${t}_provider_check CHECK (provider IN (${allowed}))`);
+      log.push('ok: ' + t);
+    }
+    res.json({ ok: true, message: "provider-CHECK erweitert um 'paystack'", log });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message, log });
+  }
+});
 // ── ONE-TIME CATEGORY SEED ────────────────────────────────────
 // Call once: GET /api/seed-categories?secret=YOUR_MIGRATION_SECRET
 app.get('/api/seed-categories', async (req, res) => {
