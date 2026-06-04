@@ -3532,11 +3532,8 @@ route('my-orders', async function () {
   if (!S.user) { render('login'); return; }
   let orders = [];
   try {
-    const res = await apiReq('/orders', 'GET', null, false);
-    const all = res.data || [];
-    orders = all.filter(function (o) {
-      return o.user && S.user && String(o.user.id || '') === String(S.user.id);
-    });
+    const res = await apiReq('/orders', 'GET', null, true);
+    orders = res.data || [];
   } catch (e) {}
 
   let h = '<div class="page-wrap"><section class="section">';
@@ -3551,9 +3548,7 @@ route('my-orders', async function () {
     h += '<div>' + t('orders.total') + '</div>';
     h += '</div>';
     orders.forEach(function (o) {
-      const total = (o.items || []).reduce(function (s, i) {
-        return s + parseFloat(i.price_usd || 0) * (i.qty || 1);
-      }, 0);
+      const total = parseFloat(o.total || 0);
       h += '<div class="trow">';
       h += '<div>#' + esc(o.id) + '</div>';
       h += '<div>' + (o.created_at ? new Date(o.created_at).toLocaleString() : '') + '</div>';
