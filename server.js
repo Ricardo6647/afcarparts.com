@@ -505,6 +505,133 @@ app.get('/api/migrate-billing', async (req, res) => {
     res.status(500).json({ ok: false, error: err.message, log });
   }
 });
+// file: server.js — Block einfügen (Phase 2.0 Reparatur: orders-Schema)
+// Oberhalb von app.get('/api/seed-afcarparts-categories', ...) platzieren.
+// Einmal aufrufen: GET /api/migrate-orders-fix?secret=MIGRATION_SECRET
+
+/* ============================================================
+   PHASE 2.0 FIX - bringt orders/order_items auf das korrekte Schema.
+   - orders LEER  -> sauber neu anlegen (DROP + CREATE)
+   - orders HAT DATEN -> nur fehlende Spalten ergaenzen (non-destruktiv)
+   Idempotent, mehrfach aufrufbar.
+   ============================================================ */
+app.get('/api/migrate-orders-fix', async (req, res) => {
+  if (!process.env.MIGRATION_SECRET) return res.status(503).json({ error: 'MIGRATION_SECRET not set' });
+  if (req.query.secret !== process.env.MIGRATION_SECRET) return res.status(401).json({ error: 'Invalid secret' });
+
+  const log = [];
+  try {
+    // ID-Typen erkennen (typkompatible Fremdschluessel)
+    const typeRes = await query(
+      `SELECT table_name, data_type FROM information_schema.columns
+        WHERE table_schema='public' AND column_name='id'
+          AND table_name IN ('users','shops','products')`
+    );
+    const map = {};
+    for (const r of typeRes.rows) map[r.table_name] = r.data_type;
+    const toCol = (dt) => ({ integer: 'INTEGER', bigint: 'BIGINT', smallint: 'SMALLINT', uuid: 'UUID',
+      'character varying': 'TEXT', text: 'TEXT' }[(dt || '').toLowerCase()] || 'BIGINT');
+    const USER_ID = toCol(map['users']);
+    const SHOP_ID = toCol(map['shops']);
+    const PRODUCT_ID = toCol(map['products']);
+
+    // Existiert orders schon? Wenn ja: wie viele Zeilen?
+    const exists = await query(
+      `SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='orders'`
+    );
+    let rowCount = 0;
+    if (exists.rows.length) {
+      const c = await query(`SELECT count(*)::int AS c FROM orders`);
+      rowCount = c.rows[0].c;
+    }
+    log.push('orders existiert: ' + (exists.rows.length ? 'ja' : 'nein') + ', Zeilen: ' + rowCount);
+
+    if (!exists.rows.length || rowCount === 0) {
+      // ---- Sauberer Neuaufbau (leer/nicht vorhanden) ----
+      await query(`DROP TABLE IF EXISTS order_items CASCADE`);
+      await query(`DROP TABLE IF EXISTS orders CASCADE`);
+      log.push('alte orders/order_items verworfen (waren leer)');
+
+      await query(`
+        CREATE TABLE orders (
+          id BIGSERIAL PRIMARY KEY,
+          buyer_user_id ${USER_ID} REFERENCES users(id) ON DELETE SET NULL,
+          email TEXT,
+          currency TEXT NOT NULL DEFAULT 'USD',
+          subtotal NUMERIC(12,2) NOT NULL DEFAULT 0,
+          shipping NUMERIC(12,2) NOT NULL DEFAULT 0,
+          total NUMERIC(12,2) NOT NULL DEFAULT 0,
+          status TEXT NOT NULL DEFAULT 'pending'
+            CHECK (status IN ('pending','paid','fulfilled','cancelled','refunded')),
+          address JSONB NOT NULL DEFAULT '{}'::jsonb,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )`);
+      await query(`
+        CREATE TABLE order_items (
+          id BIGSERIAL PRIMARY KEY,
+          order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+          product_id ${PRODUCT_ID} REFERENCES products(id) ON DELETE SET NULL,
+          shop_id ${SHOP_ID} REFERENCES shops(id) ON DELETE SET NULL,
+          merchant_id BIGINT REFERENCES merchants(id) ON DELETE SET NULL,
+          title TEXT,
+          qty INTEGER NOT NULL DEFAULT 1,
+          unit_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+          line_total NUMERIC(12,2) NOT NULL DEFAULT 0,
+          commission_rate NUMERIC(5,4) NOT NULL DEFAULT 0,
+          commission_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+          payout_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+          payout_status TEXT NOT NULL DEFAULT 'pending'
+            CHECK (payout_status IN ('pending','paid','failed','reversed')),
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )`);
+      await query(`CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items (order_id)`);
+      await query(`CREATE INDEX IF NOT EXISTS idx_order_items_merchant ON order_items (merchant_id)`);
+      log.push('orders + order_items neu angelegt (korrektes Schema)');
+    } else {
+      // ---- Non-destruktiv: fehlende Spalten ergaenzen ----
+      const orderCols = [
+        ['buyer_user_id', USER_ID],
+        ['email', 'TEXT'],
+        ['currency', "TEXT DEFAULT 'USD'"],
+        ['subtotal', 'NUMERIC(12,2) DEFAULT 0'],
+        ['shipping', 'NUMERIC(12,2) DEFAULT 0'],
+        ['total', 'NUMERIC(12,2) DEFAULT 0'],
+        ['status', "TEXT DEFAULT 'pending'"],
+        ['address', "JSONB DEFAULT '{}'::jsonb"],
+        ['created_at', 'TIMESTAMPTZ DEFAULT now()'],
+        ['updated_at', 'TIMESTAMPTZ DEFAULT now()'],
+      ];
+      for (const [c, def] of orderCols) { await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS ${c} ${def}`); }
+      log.push('fehlende orders-Spalten ergaenzt');
+
+      // Alte Pflichtspalten (NOT NULL ohne Default) entschaerfen, damit Inserts nicht brechen
+      const expected = new Set(orderCols.map(x => x[0]).concat(['id']));
+      const leftover = await query(
+        `SELECT column_name FROM information_schema.columns
+          WHERE table_schema='public' AND table_name='orders'
+            AND is_nullable='NO' AND column_default IS NULL`
+      );
+      for (const r of leftover.rows) {
+        if (!expected.has(r.column_name)) {
+          await query(`ALTER TABLE orders ALTER COLUMN "${r.column_name}" DROP NOT NULL`);
+          log.push('orders: NOT NULL entfernt von ' + r.column_name);
+        }
+      }
+    }
+
+    // Report: aktuelle Spalten
+    const oc = await query(
+      `SELECT column_name, data_type, is_nullable, column_default
+         FROM information_schema.columns
+        WHERE table_schema='public' AND table_name='orders'
+        ORDER BY ordinal_position`
+    );
+    res.json({ ok: true, log, orders_columns: oc.rows });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message, log });
+  }
+});
 // ── ONE-TIME CATEGORY SEED ────────────────────────────────────
 // Call once: GET /api/seed-categories?secret=YOUR_MIGRATION_SECRET
 app.get('/api/seed-categories', async (req, res) => {
