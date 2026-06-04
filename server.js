@@ -632,6 +632,78 @@ app.get('/api/migrate-orders-fix', async (req, res) => {
     res.status(500).json({ ok: false, error: err.message, log });
   }
 });
+// ============================================================
+//  PHASE 2.1a - HAENDLER-AUSZAHLUNGSKONTO (Paystack Subaccount)
+//  EINFUEGEN bei deinen anderen app.get/app.post-Routen,
+//  z. B. oberhalb von app.get('/api/seed-categories', ...).
+//  Nutzt requireSeller (aus Phase 1 Block B) und COMMISSION_RATE (aus Phase 2.0).
+// ============================================================
+
+// Bankliste fuer das Dropdown (nur eingeloggte Haendler)
+app.get('/api/paystack/banks', requireSeller, async (req, res) => {
+  try {
+    const ps = payments.getProvider('paystack');
+    const banks = await ps.listBanks(req.query.country || 'nigeria');
+    res.json({ data: banks });
+  } catch (err) {
+    console.error('[paystack/banks]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Aktuelles Auszahlungskonto des Haendlers
+app.get('/api/seller/payout-account', requireSeller, async (req, res) => {
+  try {
+    const m = await billingDb.ensureMerchant(req.user.id);
+    const acct = await billingDb.getProviderAccount(m.id, 'paystack', 'subaccount');
+    res.json({
+      connected: !!(acct && acct.external_id),
+      account: acct ? { subaccount_code: acct.external_id, status: acct.status, meta: acct.meta } : null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Auszahlungskonto anlegen -> Paystack-Subaccount erstellen + speichern
+app.post('/api/seller/payout-account', requireSeller, async (req, res) => {
+  try {
+    const { settlement_bank, account_number, business_name, country, phone } = req.body || {};
+    if (!settlement_bank || !account_number) {
+      return res.status(400).json({ error: 'Bank (settlement_bank) und Kontonummer (account_number) erforderlich' });
+    }
+
+    const m = await billingDb.ensureMerchant(req.user.id);
+    const ps = payments.getProvider('paystack');
+
+    const sub = await ps.createSubaccount({
+      businessName: business_name || req.user.name || ('Merchant ' + m.id),
+      settlementBank: settlement_bank,
+      accountNumber: account_number,
+      percentageCharge: Math.round(COMMISSION_RATE * 100), // 16
+      primaryContactEmail: req.user.email,
+      primaryContactName: req.user.name || undefined,
+      primaryContactPhone: phone || undefined,
+      description: 'AFCARPARTS Haendler #' + m.id,
+    });
+
+    await billingDb.upsertProviderAccount({
+      merchantId: m.id, provider: 'paystack', kind: 'subaccount',
+      externalId: sub.subaccount_code, status: 'active', currency: sub.currency || null,
+      meta: { account_name: sub.account_name, account_number: sub.account_number, bank: settlement_bank, id: sub.id },
+    });
+    await billingDb.setDefaultPayoutProvider(m.id, 'paystack');
+
+    res.json({
+      success: true,
+      subaccount_code: sub.subaccount_code,
+      account_name: sub.account_name || null,
+    });
+  } catch (err) {
+    console.error('[seller/payout-account]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 // ── ONE-TIME CATEGORY SEED ────────────────────────────────────
 // Call once: GET /api/seed-categories?secret=YOUR_MIGRATION_SECRET
 app.get('/api/seed-categories', async (req, res) => {
