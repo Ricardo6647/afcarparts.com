@@ -1945,7 +1945,149 @@ app.get('/api/categories/all', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// ============================================================
+//  PHASE 2.2 - INKASSO + SPLIT (Paystack)
+//  EINFUEGEN bei deinen anderen Routen, z. B. oberhalb von
+//  app.get('/api/seed-categories', ...).
+//  Nutzt billingDb, payments, query, COMMISSION_RATE (Phase 2.0).
+//
+//  Ablauf: Bestellung (Phase 2.0, status 'pending') -> /init startet
+//  die Paystack-Zahlung mit Split -> Kunde zahlt -> /verify bestaetigt,
+//  setzt Bestellung 'paid', bucht Bestand ab und protokolliert Payouts.
+// ============================================================
 
+// Waehrung & FX (Testmodus: konfigurierbar via Render-ENV)
+const PAYSTACK_CURRENCY = process.env.PAYSTACK_CURRENCY || 'NGN';
+const USD_TO_NGN = parseFloat(process.env.USD_TO_NGN) || 1600;
+function usdToKobo(usd) { return Math.round((Number(usd) || 0) * USD_TO_NGN * 100); }
+
+// ---- Zahlung initialisieren -> authorization_url ----
+app.post('/api/checkout/paystack/init', async (req, res) => {
+  try {
+    const { order_id, email } = req.body || {};
+    const order = await billingDb.getOrder(order_id);
+    if (!order) return res.status(404).json({ error: 'Bestellung nicht gefunden' });
+    if (order.status === 'paid') return res.status(400).json({ error: 'Bestellung bereits bezahlt' });
+
+    const items = await billingDb.listOrderItems(order.id);
+    if (!items.length) return res.status(400).json({ error: 'Leere Bestellung' });
+
+    const buyerEmail = email || order.email;
+    if (!buyerEmail) return res.status(400).json({ error: 'E-Mail erforderlich' });
+
+    const ps = payments.getProvider('paystack');
+
+    // Payouts je Haendler-Subaccount aggregieren
+    const bySub = {};                 // subaccount_code -> payout_usd
+    let totalCommissionUsd = 0;
+    for (const it of items) {
+      totalCommissionUsd += Number(it.commission_amount) || 0;
+      if (it.merchant_id) {
+        const acct = await billingDb.getProviderAccount(it.merchant_id, 'paystack', 'subaccount');
+        if (acct && acct.external_id) {
+          bySub[acct.external_id] = (bySub[acct.external_id] || 0) + (Number(it.payout_amount) || 0);
+        }
+        // kein Subaccount -> Anteil bleibt beim Plattformkonto
+      }
+    }
+
+    const amountKobo = usdToKobo(order.total);
+    const reference = 'AFC-' + order.id + '-' + Date.now();
+    const callbackUrl = (process.env.PUBLIC_BASE_URL || 'https://afcarparts.com') + '/?paystack_ref=' + reference;
+    const subs = Object.keys(bySub);
+
+    const initParams = {
+      email: buyerEmail, amountKobo, currency: PAYSTACK_CURRENCY,
+      reference, callbackUrl, metadata: { order_id: order.id },
+    };
+
+    if (subs.length === 1) {
+      // Einzel-Subaccount: flacher Plattform-Charge = Provision
+      initParams.subaccount = subs[0];
+      initParams.transactionCharge = usdToKobo(totalCommissionUsd);
+    } else if (subs.length > 1) {
+      // Multi-Split: Gruppe anlegen (flat), Anteile = payout je Subaccount
+      const split = await ps.createSplit({
+        name: reference,
+        type: 'flat',
+        currency: PAYSTACK_CURRENCY,
+        subaccounts: subs.map(code => ({ subaccount: code, share: usdToKobo(bySub[code]) })),
+      });
+      initParams.splitCode = split.split_code;
+    }
+    // subs.length === 0 -> kein Split, Plattform erhaelt alles
+
+    const tx = await ps.initializeTransaction(initParams);
+
+    // Pending-Payment protokollieren
+    await billingDb.recordPayment({
+      orderId: order.id, provider: 'paystack', providerPaymentId: reference,
+      amount: order.total, currency: order.currency, status: 'pending', method: 'paystack',
+      raw: { authorization_url: tx.authorization_url, amount_kobo: amountKobo, currency_charged: PAYSTACK_CURRENCY },
+    });
+
+    res.json({ authorization_url: tx.authorization_url, reference });
+  } catch (err) {
+    console.error('[checkout/init]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- Zahlung verifizieren (Callback / manuell) ----
+app.get('/api/checkout/paystack/verify', async (req, res) => {
+  try {
+    const reference = req.query.reference;
+    if (!reference) return res.status(400).json({ error: 'reference erforderlich' });
+
+    const ps = payments.getProvider('paystack');
+    const tx = await ps.verifyTransaction(reference);
+    const success = !!(tx && tx.status === 'success');
+
+    // order_id aus Referenz "AFC-<id>-<ts>"
+    const orderId = parseInt(String(reference).split('-')[1], 10) || null;
+    const order = orderId ? await billingDb.getOrder(orderId) : null;
+
+    // Payment-Status aktualisieren
+    await billingDb.recordPayment({
+      orderId: orderId, provider: 'paystack', providerPaymentId: reference,
+      amount: (tx && tx.amount ? tx.amount / 100 : 0), currency: (tx && tx.currency) || PAYSTACK_CURRENCY,
+      status: success ? 'succeeded' : 'failed', method: 'paystack', raw: tx || {},
+    });
+
+    // Nur einmal verarbeiten (Idempotenz ueber Bestellstatus)
+    if (success && order && order.status !== 'paid') {
+      await billingDb.setOrderStatus(orderId, 'paid');
+      const items = await billingDb.listOrderItems(orderId);
+
+      // Bestand abbuchen
+      for (const it of items) {
+        if (it.product_id) {
+          await query(`UPDATE products SET stock = GREATEST(COALESCE(stock,0) - $2, 0) WHERE id = $1`, [it.product_id, it.qty || 1]);
+        }
+      }
+      // Positionen als ausgezahlt markieren (Split laeuft automatisch ueber Paystack)
+      await query(`UPDATE order_items SET payout_status = 'paid' WHERE order_id = $1`, [orderId]);
+
+      // Payout-Ledger je Haendler
+      const byMerchant = {};
+      for (const it of items) {
+        if (it.merchant_id) byMerchant[it.merchant_id] = (byMerchant[it.merchant_id] || 0) + (Number(it.payout_amount) || 0);
+      }
+      for (const mid of Object.keys(byMerchant)) {
+        await billingDb.recordPayout({
+          merchantId: parseInt(mid, 10), orderId, provider: 'paystack',
+          providerPayoutId: reference + ':' + mid, amount: byMerchant[mid],
+          currency: order.currency, status: 'paid', kind: 'auto_split', raw: { via: 'split' },
+        });
+      }
+    }
+
+    res.json({ success, status: tx ? tx.status : 'unknown', order_id: orderId, paid: success });
+  } catch (err) {
+    console.error('[checkout/verify]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 app.get('/api/categories/:id/subs', async (req, res) => {
   const lang = (req.query.lang || 'en').toLowerCase().trim();
   try {
