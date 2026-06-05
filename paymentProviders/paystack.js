@@ -57,7 +57,41 @@ class PaystackProvider extends PaymentProvider {
     return this.createSubaccount(bank);
   }
 
-  // collectPayment / verifyWebhook / parseWebhook -> Phase 2.2 / 2.3 (erben Stub aus base)
+  // ---- INKASSO + SPLIT (Phase 2.2) ----
+
+  // Transaktion initialisieren; gibt { authorization_url, reference, access_code } zurueck.
+  async initializeTransaction({ email, amountKobo, currency, reference, callbackUrl, subaccount, transactionCharge, splitCode, bearer, metadata }) {
+    const body = { email: email, amount: amountKobo, currency: currency || 'NGN' };
+    if (reference) body.reference = reference;
+    if (callbackUrl) body.callback_url = callbackUrl;
+    if (splitCode) {
+      body.split_code = splitCode;
+    } else if (subaccount) {
+      body.subaccount = subaccount;
+      if (transactionCharge != null) body.transaction_charge = transactionCharge;
+      if (bearer) body.bearer = bearer;
+    }
+    if (metadata) body.metadata = metadata;
+    const d = await this._req('POST', '/transaction/initialize', body);
+    return d.data; // { authorization_url, access_code, reference }
+  }
+
+  // Multi-Split-Gruppe anlegen (mehrere Subaccounts in einer Transaktion). Gibt { split_code } zurueck.
+  async createSplit({ name, type, currency, subaccounts, bearerType, bearerSubaccount }) {
+    const body = { name: name, type: type || 'flat', currency: currency || 'NGN', subaccounts: subaccounts };
+    if (bearerType) body.bearer_type = bearerType;
+    if (bearerSubaccount) body.bearer_subaccount = bearerSubaccount;
+    const d = await this._req('POST', '/split', body);
+    return d.data; // { split_code, ... }
+  }
+
+  // Transaktion verifizieren (nach Rueckkehr vom Checkout).
+  async verifyTransaction(reference) {
+    const d = await this._req('GET', '/transaction/verify/' + encodeURIComponent(reference));
+    return d.data; // { status, amount, currency, reference, ... }
+  }
+
+  // verifyWebhook / parseWebhook -> Phase 2.3
 }
 
 module.exports = PaystackProvider;
