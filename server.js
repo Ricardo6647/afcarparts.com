@@ -1958,7 +1958,7 @@ app.get('/api/categories/all', async (req, res) => {
 
 // Waehrung & FX (Testmodus: konfigurierbar via Render-ENV)
 const PAYSTACK_CURRENCY = (process.env.PAYSTACK_CURRENCY || 'NGN').toUpperCase();
-const ZERO_DECIMAL = ['XOF', 'XAF', 'JPY', 'KRW', 'CLP', 'GNF', 'UGX', 'RWF', 'BIF', 'VUV', 'XPF'];
+const ZERO_DECIMAL = []; // Paystack erwartet bei allen unterstützten Währungen Subeinheiten (×100)
 const PAYSTACK_FX = parseFloat(process.env['USD_TO_' + PAYSTACK_CURRENCY]) || 1;
 function usdToKobo(usd) {
   const local = (Number(usd) || 0) * PAYSTACK_FX;
