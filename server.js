@@ -35,7 +35,82 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
       rawBody: req.body,        // Buffer dank express.raw
       headers: req.headers,
     });
+// ============================================================
+//  PHASE 2.3 - PAYSTACK WEBHOOK (charge.success)
+//  WICHTIG: MUSS VOR app.use(express.json()) stehen!
+//  Die Signaturpruefung braucht den unveraenderten Raw-Body.
+//  -> Platziere diesen Block direkt NACH deinem Stripe-Webhook
+//     (app.post('/api/stripe/webhook', ...)), also noch vor
+//     app.use(express.json()).
+//
+//  Paystack signiert jeden Webhook mit HMAC-SHA512 (Secret Key)
+//  im Header x-paystack-signature. Wir verifizieren, antworten
+//  sofort mit 200 und setzen bei charge.success die Bestellung
+//  auf 'paid' - server-zu-server, unabhaengig vom Browser-Redirect.
+//  Idempotent ueber den Bestellstatus (kein Doppel-Abzug).
+// ============================================================
+app.post('/api/paystack/webhook', express.raw({ type: '*/*' }), async (req, res) => {
+  const crypto = require('crypto');
+  try {
+    const secret = process.env.PAYSTACK_SECRET_KEY || '';
+    const sig = req.headers['x-paystack-signature'];
+    const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || '');
+    const hash = crypto.createHmac('sha512', secret).update(raw).digest('hex');
+    if (!sig || hash !== sig) {
+      console.warn('[paystack/webhook] ungueltige Signatur');
+      return res.status(401).send('invalid signature');
+    }
 
+    const evt = JSON.parse(raw.toString('utf8'));
+    // Paystack erwartet eine schnelle Antwort -> sofort 200, Rest danach.
+    res.sendStatus(200);
+
+    if (!(evt && evt.event === 'charge.success' && evt.data && evt.data.status === 'success')) return;
+
+    const reference = evt.data.reference;
+    const orderId = parseInt(String(reference).split('-')[1], 10) || null;
+    if (!orderId) return;
+
+    const order = await billingDb.getOrder(orderId);
+
+    // Payment protokollieren (idempotent ueber provider_payment_id)
+    await billingDb.recordPayment({
+      orderId: orderId, provider: 'paystack', providerPaymentId: reference,
+      amount: koboToMain(evt.data.amount || 0, evt.data.currency),
+      currency: evt.data.currency || PAYSTACK_CURRENCY,
+      status: 'succeeded', method: 'paystack', raw: evt.data,
+    });
+
+    // Nur einmal verarbeiten (Bestellstatus als Idempotenz-Schutz)
+    if (order && order.status !== 'paid') {
+      await billingDb.setOrderStatus(orderId, 'paid');
+      const items = await billingDb.listOrderItems(orderId);
+
+      for (const it of items) {
+        if (it.product_id) {
+          await query(`UPDATE products SET stock = GREATEST(COALESCE(stock,0) - $2, 0) WHERE id = $1`, [it.product_id, it.qty || 1]);
+        }
+      }
+      await query(`UPDATE order_items SET payout_status = 'paid' WHERE order_id = $1`, [orderId]);
+
+      const byMerchant = {};
+      for (const it of items) {
+        if (it.merchant_id) byMerchant[it.merchant_id] = (byMerchant[it.merchant_id] || 0) + (Number(it.payout_amount) || 0);
+      }
+      for (const mid of Object.keys(byMerchant)) {
+        await billingDb.recordPayout({
+          merchantId: parseInt(mid, 10), orderId, provider: 'paystack',
+          providerPayoutId: reference + ':' + mid, amount: byMerchant[mid],
+          currency: order.currency, status: 'paid', kind: 'auto_split', raw: { via: 'webhook' },
+        });
+      }
+      console.log('[paystack/webhook] Bestellung', orderId, 'via Webhook auf paid gesetzt');
+    }
+  } catch (err) {
+    console.error('[paystack/webhook]', err.message);
+    if (!res.headersSent) res.sendStatus(200); // 200, damit Paystack nicht endlos wiederholt
+  }
+});
     // Duplikat (Retry) -> still bestaetigen
     if (!evt) return res.json({ received: true, duplicate: true });
 
