@@ -1957,9 +1957,16 @@ app.get('/api/categories/all', async (req, res) => {
 // ============================================================
 
 // Waehrung & FX (Testmodus: konfigurierbar via Render-ENV)
-const PAYSTACK_CURRENCY = process.env.PAYSTACK_CURRENCY || 'NGN';
-const USD_TO_NGN = parseFloat(process.env.USD_TO_NGN) || 1600;
-function usdToKobo(usd) { return Math.round((Number(usd) || 0) * USD_TO_NGN * 100); }
+const PAYSTACK_CURRENCY = (process.env.PAYSTACK_CURRENCY || 'NGN').toUpperCase();
+const ZERO_DECIMAL = ['XOF', 'XAF', 'JPY', 'KRW', 'CLP', 'GNF', 'UGX', 'RWF', 'BIF', 'VUV', 'XPF'];
+const PAYSTACK_FX = parseFloat(process.env['USD_TO_' + PAYSTACK_CURRENCY]) || 1;
+function usdToKobo(usd) {
+  const local = (Number(usd) || 0) * PAYSTACK_FX;
+  return ZERO_DECIMAL.includes(PAYSTACK_CURRENCY) ? Math.round(local) : Math.round(local * 100);
+}
+function koboToMain(amount, currency) {
+  return ZERO_DECIMAL.includes(String(currency || PAYSTACK_CURRENCY).toUpperCase()) ? amount : amount / 100;
+}
 
 // ---- Zahlung initialisieren -> authorization_url ----
 app.post('/api/checkout/paystack/init', async (req, res) => {
@@ -2050,7 +2057,7 @@ app.get('/api/checkout/paystack/verify', async (req, res) => {
     // Payment-Status aktualisieren
     await billingDb.recordPayment({
       orderId: orderId, provider: 'paystack', providerPaymentId: reference,
-      amount: (tx && tx.amount ? tx.amount / 100 : 0), currency: (tx && tx.currency) || PAYSTACK_CURRENCY,
+      amount: (tx && tx.amount ? koboToMain(tx.amount, tx.currency) : 0), currency: (tx && tx.currency) || PAYSTACK_CURRENCY,
       status: success ? 'succeeded' : 'failed', method: 'paystack', raw: tx || {},
     });
 
