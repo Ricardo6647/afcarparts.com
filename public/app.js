@@ -3606,6 +3606,14 @@ route('seller-dashboard', async function () {
       active: true,
       stat: null
     },
+     {
+      icon: '\uD83C\uDF0D',
+      title: ({ de: 'Stripe-Auszahlung (EU/US)', en: 'Stripe payout (EU/US)', fr: 'Versement Stripe (UE/US)', pt: 'Pagamento Stripe (UE/EUA)', sw: 'Malipo ya Stripe (EU/US)' }[S.lang] || 'Stripe payout (EU/US)'),
+      desc: ({ de: 'Auszahlungskonto f\u00fcr H\u00e4ndler au\u00dferhalb Afrikas', en: 'Payout account for sellers outside Africa', fr: 'Compte de versement hors Afrique', pt: 'Conta de pagamento fora de \u00c1frica', sw: 'Akaunti ya malipo nje ya Afrika' }[S.lang] || 'Payout account for sellers outside Africa'),
+      target: 'seller-stripe-connect',
+      active: true,
+      stat: null
+    },
     {
       icon: '📦',
       title: t('seller_hub.mod_products_t'),
