@@ -3964,6 +3964,91 @@ async function sellerSavePayout(btn) {
     if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
   }
 }
+/* ============================================================
+   PHASE 3b - FRONTEND : STRIPE-AUSZAHLUNG (Connect, EU/US/global)
+   EINFUEGEN in app.js direkt NACH dem Block:
+     route('seller-payout', ...) inkl. sellerLoadBanks / sellerSavePayout
+   ============================================================ */
+
+route('seller-stripe-connect', async function () {
+  if (!S.user || (S.user.role !== 'seller' && S.user.role !== 'dealer' && S.user.role !== 'admin')) { render('login'); return; }
+
+  var L = {
+    de: { title: 'Stripe-Auszahlung (EU/US)', sub: 'Für Händler außerhalb Afrikas: Konto über Stripe verbinden. Stripe übernimmt die Prüfung; dein Verkaufsanteil wird direkt dorthin ausgezahlt (abzgl. Provision).',
+          country: 'Land', connect: 'Mit Stripe verbinden', resume: 'Onboarding fortsetzen',
+          connected: 'Stripe-Konto verbunden', ready: 'Zahlungsbereit', pending: 'Onboarding noch nicht abgeschlossen',
+          back: '< Zurück zum Dashboard', loading: 'Lädt …', err: 'Fehler' },
+    en: { title: 'Stripe payout (EU/US)', sub: 'For sellers outside Africa: connect your account via Stripe. Stripe handles verification; your sales share is paid out there (minus commission).',
+          country: 'Country', connect: 'Connect with Stripe', resume: 'Resume onboarding',
+          connected: 'Stripe account connected', ready: 'Ready for payments', pending: 'Onboarding not finished yet',
+          back: '< Back to dashboard', loading: 'Loading …', err: 'Error' },
+    fr: { title: 'Versement Stripe (UE/US)', sub: 'Pour les vendeurs hors d\u2019Afrique : connectez votre compte via Stripe. Stripe g\u00e8re la v\u00e9rification ; votre part est vers\u00e9e l\u00e0 (moins la commission).',
+          country: 'Pays', connect: 'Connecter avec Stripe', resume: 'Reprendre l\u2019inscription',
+          connected: 'Compte Stripe connect\u00e9', ready: 'Pr\u00eat pour les paiements', pending: 'Inscription non termin\u00e9e',
+          back: '< Retour au tableau de bord', loading: 'Chargement …', err: 'Erreur' },
+    pt: { title: 'Pagamento Stripe (UE/EUA)', sub: 'Para vendedores fora de \u00c1frica: ligue a sua conta via Stripe. A Stripe trata da verifica\u00e7\u00e3o; a sua parte \u00e9 paga a\u00ed (menos comiss\u00e3o).',
+          country: 'Pa\u00eds', connect: 'Ligar com Stripe', resume: 'Retomar registo',
+          connected: 'Conta Stripe ligada', ready: 'Pronto para pagamentos', pending: 'Registo n\u00e3o conclu\u00eddo',
+          back: '< Voltar ao painel', loading: 'A carregar …', err: 'Erro' },
+    sw: { title: 'Malipo ya Stripe (EU/US)', sub: 'Kwa wauzaji nje ya Afrika: unganisha akaunti yako kupitia Stripe. Stripe hushughulikia uthibitishaji; sehemu yako hulipwa hapo (ukiondoa kamisheni).',
+          country: 'Nchi', connect: 'Unganisha na Stripe', resume: 'Endelea na usajili',
+          connected: 'Akaunti ya Stripe imeunganishwa', ready: 'Tayari kwa malipo', pending: 'Usajili haujakamilika',
+          back: '< Rudi kwenye dashibodi', loading: 'Inapakia …', err: 'Hitilafu' }
+  };
+  var x = L[S.lang] || L.en;
+
+  var head = '<div class="page-wrap"><section class="section">'
+    + '<div class="sec-hd" style="margin-bottom:1rem"><div class="sec-title">\uD83C\uDF0D ' + esc(x.title) + '</div></div>'
+    + '<div style="opacity:.75;font-size:.9rem;margin-bottom:1.5rem">' + esc(x.sub) + '</div>';
+  $('content').innerHTML = head + '<div style="opacity:.6">' + esc(x.loading) + '</div></section></div>';
+
+  var st = null;
+  try { st = await apiReq('/seller/stripe-connect', 'GET', null, true); } catch (e) {}
+
+  var h = head;
+
+  if (st && st.connected) {
+    h += '<div style="margin-bottom:1.5rem;padding:1rem 1.25rem;background:var(--surface2);border-radius:10px;border-left:4px solid #16a34a">';
+    h += '<div style="font-weight:700;margin-bottom:.3rem">\u2713 ' + esc(x.connected) + '</div>';
+    h += '<div style="font-size:.85rem;opacity:.8">' + esc(x.ready) + (st.account && st.account.country ? ' \u00b7 ' + esc(st.account.country) : '') + '</div>';
+    h += '</div>';
+  } else {
+    var resume = !!(st && st.account && st.account.id); // Konto existiert, aber noch nicht fertig
+    var lbl = 'display:block;font-size:.8rem;font-weight:600;margin:.9rem 0 .3rem';
+    var inp = 'width:100%;max-width:420px;padding:.6rem;border:1px solid var(--line,#ccc);border-radius:8px;background:var(--surface,#fff);color:inherit;box-sizing:border-box';
+    var countries = [['DE','Deutschland'],['AT','\u00d6sterreich'],['FR','France'],['NL','Nederland'],['ES','Espa\u00f1a'],['IT','Italia'],['GB','United Kingdom'],['US','United States'],['CA','Canada']];
+    var copts = countries.map(function (c) { return '<option value="' + c[0] + '">' + esc(c[1]) + '</option>'; }).join('');
+
+    if (resume) {
+      h += '<div style="margin-bottom:1rem;padding:.8rem 1rem;background:var(--surface2);border-radius:10px;border-left:4px solid #f59e0b;font-size:.88rem">' + esc(x.pending) + '</div>';
+    }
+    h += '<div style="max-width:420px">';
+    h += '<label style="' + lbl + '">' + esc(x.country) + '</label>';
+    h += '<select id="sc_country" style="' + inp + '">' + copts + '</select>';
+    h += '<div style="margin-top:1.1rem"><button class="btn" onclick="sellerStripeConnect(this)" style="padding:.6rem 1.2rem;background:#635bff;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer">' + esc(resume ? x.resume : x.connect) + '</button></div>';
+    h += '<div id="sc_result" style="margin-top:.9rem;font-size:.9rem"></div>';
+    h += '</div>';
+  }
+
+  h += '<div style="margin-top:1.75rem"><a href="#" onclick="render(\'seller-dashboard\');return false">' + esc(x.back) + '</a></div>';
+  h += '</section></div>';
+  $('content').innerHTML = h;
+});
+
+async function sellerStripeConnect(btn) {
+  var country = (document.getElementById('sc_country') || {}).value || 'DE';
+  var out = document.getElementById('sc_result');
+  try {
+    if (btn) { btn.disabled = true; btn.style.opacity = '.6'; }
+    var d = await apiReq('/seller/stripe-connect', 'POST', { country: country }, true);
+    if (d && d.onboarding_url) { window.location.href = d.onboarding_url; return; }
+    if (out) { out.style.color = '#dc2626'; out.textContent = (S.lang === 'de' ? 'Fehler' : 'Error'); }
+  } catch (e) {
+    if (out) { out.style.color = '#dc2626'; out.textContent = (e && e.message) ? e.message : 'Fehler'; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+  }
+}
 /* ---------- ROUTE: SELLER SHOP (Mein Shop) ---------- */
 route('seller-shop', async function () {
   if (!S.user || (S.user.role !== 'seller' && S.user.role !== 'dealer' && S.user.role !== 'admin')) { render('login'); return; }
