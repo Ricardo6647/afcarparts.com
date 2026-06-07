@@ -74,6 +74,54 @@ class StripeProvider extends PaymentProvider {
     return session.url;
   }
 
+  // ---- CONNECT (Phase 3: Haendler-Auszahlung EU/US/global) ----
+
+  // Legt bei Bedarf ein Express-Connect-Konto an und merkt die ID in provider_accounts.
+  async createConnectAccount({ merchant, email, country }) {
+    const existing = await billingDb.getProviderAccount(merchant.id, 'stripe', 'connect');
+    if (existing && existing.external_id) return existing.external_id;
+
+    const account = await this.stripe.accounts.create({
+      type: 'express',
+      email: email || undefined,
+      country: country || undefined, // z. B. 'DE', 'US' - Haendlerland
+      capabilities: {
+        card_payments: { requested: true },
+        transfers: { requested: true },
+      },
+      metadata: { merchant_id: String(merchant.id) },
+    });
+
+    await billingDb.upsertProviderAccount({
+      merchantId: merchant.id, provider: 'stripe', kind: 'connect',
+      externalId: account.id, status: 'pending', meta: { country: country || null },
+    });
+    return account.id;
+  }
+
+  // Erstellt einen einmaligen, gehosteten Onboarding-Link (KYC laeuft bei Stripe).
+  async createAccountLink({ accountId, refreshUrl, returnUrl }) {
+    const link = await this.stripe.accountLinks.create({
+      account: accountId,
+      refresh_url: refreshUrl,
+      return_url: returnUrl,
+      type: 'account_onboarding',
+    });
+    return link.url;
+  }
+
+  // Status eines Connect-Kontos abfragen (ist es zahlungs-/auszahlungsbereit?).
+  async getConnectAccount(accountId) {
+    const a = await this.stripe.accounts.retrieve(accountId);
+    return {
+      id: a.id,
+      chargesEnabled: !!a.charges_enabled,
+      payoutsEnabled: !!a.payouts_enabled,
+      detailsSubmitted: !!a.details_submitted,
+      country: a.country || null,
+    };
+  }
+
   // ---- WEBHOOKS ----
 
   // Verifiziert die Signatur und gibt das native Stripe-Event zurueck.
