@@ -808,6 +808,73 @@ app.get('/api/migrate-add-paystack', async (req, res) => {
     res.status(500).json({ ok: false, error: err.message, log });
   }
 });
+// ============================================================
+//  PHASE 3a - STRIPE CONNECT ONBOARDING (EU/US/global-Haendler)
+//  EINFUEGEN bei deinen anderen Routen, z. B. oberhalb von
+//  app.get('/api/seed-categories', ...).
+//  Nutzt requireSeller (Phase 1), billingDb, payments.
+//
+//  Voraussetzung: In Stripe muss CONNECT aktiviert sein
+//  (Dashboard -> Connect -> Get started, im Testmodus).
+// ============================================================
+
+// Onboarding starten -> gehosteter Stripe-Link
+app.post('/api/seller/stripe-connect', requireSeller, async (req, res) => {
+  try {
+    const { country } = req.body || {};
+    const m = await billingDb.ensureMerchant(req.user.id);
+    const stripe = payments.getProvider('stripe');
+
+    const accountId = await stripe.createConnectAccount({
+      merchant: m, email: req.user.email, country: country || undefined,
+    });
+
+    const base = process.env.PUBLIC_BASE_URL || 'https://afcarparts.com';
+    const url = await stripe.createAccountLink({
+      accountId,
+      refreshUrl: base + '/#seller-stripe-connect',
+      returnUrl: base + '/#seller-stripe-connect?connected=1',
+    });
+
+    res.json({ onboarding_url: url, account_id: accountId });
+  } catch (err) {
+    console.error('[seller/stripe-connect]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Status des Connect-Kontos (zahlungsbereit?)
+app.get('/api/seller/stripe-connect', requireSeller, async (req, res) => {
+  try {
+    const m = await billingDb.ensureMerchant(req.user.id);
+    const acct = await billingDb.getProviderAccount(m.id, 'stripe', 'connect');
+    if (!acct || !acct.external_id) return res.json({ connected: false, account: null });
+
+    const stripe = payments.getProvider('stripe');
+    const info = await stripe.getConnectAccount(acct.external_id);
+
+    await billingDb.upsertProviderAccount({
+      merchantId: m.id, provider: 'stripe', kind: 'connect',
+      externalId: acct.external_id, status: info.chargesEnabled ? 'active' : 'pending',
+      meta: {
+        country: info.country, charges_enabled: info.chargesEnabled,
+        payouts_enabled: info.payoutsEnabled, details_submitted: info.detailsSubmitted,
+      },
+    });
+
+    res.json({
+      connected: info.chargesEnabled,
+      account: {
+        id: info.id, charges_enabled: info.chargesEnabled,
+        payouts_enabled: info.payoutsEnabled, details_submitted: info.detailsSubmitted,
+        country: info.country,
+      },
+    });
+  } catch (err) {
+    console.error('[seller/stripe-connect:status]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 // ── ONE-TIME CATEGORY SEED ────────────────────────────────────
 // Call once: GET /api/seed-categories?secret=YOUR_MIGRATION_SECRET
 app.get('/api/seed-categories', async (req, res) => {
