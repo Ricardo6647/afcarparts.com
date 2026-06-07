@@ -2144,7 +2144,7 @@ app.get('/api/checkout/stripe/verify', async (req, res) => {
         await billingDb.recordPayout({
           merchantId: parseInt(mid, 10), orderId, provider: 'stripe',
           providerPayoutId: sessionId + ':' + mid, amount: byMerchant[mid],
-          currency: order.currency, status: 'paid', kind: 'destination_charge', raw: { via: 'stripe_verify' },
+          currency: order.currency, status: 'paid', kind: 'auto_split', raw: { via: 'stripe_verify' },
         });
       }
     }
