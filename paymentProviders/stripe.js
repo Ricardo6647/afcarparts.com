@@ -122,6 +122,42 @@ class StripeProvider extends PaymentProvider {
     };
   }
 
+  // ---- ORDER-CHECKOUT (Phase 3c: Karte + Split via Destination Charge) ----
+
+  // Gehostete Checkout-Session fuer eine Bestellung; Plattform-Gebuehr (16%) + Transfer an Connect-Konto.
+  async createOrderCheckout({ order, email, amountCents, applicationFeeCents, destinationAccount, currency, successUrl, cancelUrl }) {
+    const session = await this.stripe.checkout.sessions.create({
+      mode: 'payment',
+      customer_email: email || undefined,
+      line_items: [{
+        price_data: {
+          currency: (currency || 'usd').toLowerCase(),
+          product_data: { name: 'AFCARPARTS Bestellung #' + order.id },
+          unit_amount: amountCents,
+        },
+        quantity: 1,
+      }],
+      payment_intent_data: {
+        application_fee_amount: applicationFeeCents,
+        transfer_data: { destination: destinationAccount },
+        metadata: { order_id: String(order.id) },
+      },
+      metadata: { order_id: String(order.id) },
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+    });
+    return session; // { id, url, ... }
+  }
+
+  // Checkout-Session abrufen (zum Verifizieren nach Rueckkehr).
+  async retrieveCheckoutSession(sessionId) {
+    const s = await this.stripe.checkout.sessions.retrieve(sessionId);
+    return {
+      id: s.id, paymentStatus: s.payment_status, paymentIntent: s.payment_intent,
+      amountTotal: s.amount_total, currency: s.currency, metadata: s.metadata || {},
+    };
+  }
+
   // ---- WEBHOOKS ----
 
   // Verifiziert die Signatur und gibt das native Stripe-Event zurueck.
@@ -141,14 +177,27 @@ class StripeProvider extends PaymentProvider {
 
     switch (event.type) {
       case 'checkout.session.completed':
-        kind = 'subscription';
-        data = {
-          action: 'checkout_completed',
-          merchantId: (obj.metadata && obj.metadata.merchant_id) ? Number(obj.metadata.merchant_id) : null,
-          plan: (obj.metadata && obj.metadata.plan) ? obj.metadata.plan : null,
-          providerSubscriptionId: obj.subscription || null,
-          customerId: obj.customer || null,
-        };
+        if (obj.metadata && obj.metadata.order_id) {
+          // Bestellung (Phase 3c) - NICHT als Abo behandeln
+          kind = 'order_payment';
+          data = {
+            action: 'order_paid',
+            orderId: Number(obj.metadata.order_id),
+            paymentIntentId: obj.payment_intent || null,
+            amountTotal: obj.amount_total || null,
+            currency: obj.currency || null,
+            paymentStatus: obj.payment_status || null,
+          };
+        } else {
+          kind = 'subscription';
+          data = {
+            action: 'checkout_completed',
+            merchantId: (obj.metadata && obj.metadata.merchant_id) ? Number(obj.metadata.merchant_id) : null,
+            plan: (obj.metadata && obj.metadata.plan) ? obj.metadata.plan : null,
+            providerSubscriptionId: obj.subscription || null,
+            customerId: obj.customer || null,
+          };
+        }
         break;
 
       case 'customer.subscription.created':
@@ -191,4 +240,5 @@ class StripeProvider extends PaymentProvider {
   }
 }
 
+module.exports = StripeProvider;
 module.exports = StripeProvider;
