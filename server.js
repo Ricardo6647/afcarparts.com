@@ -2046,7 +2046,115 @@ app.post('/api/admin/migrate-users', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// ============================================================
+//  PHASE 3c - STRIPE KARTEN-CHECKOUT + SPLIT (Destination Charge)
+//  EINFUEGEN bei deinen Routen, z. B. oberhalb von
+//  app.get('/api/seed-categories', ...).
+//  Nutzt billingDb, payments, query.
+//
+//  Inkasso per Karte (Visa/Maestro, auch Angola-Kaeufer) ueber Stripe.
+//  16% Plattform-Gebuehr (application_fee), Rest atomar an das
+//  Stripe-Connect-Konto des Haendlers (transfer_data.destination).
+//  Aktuell ein Haendler pro Stripe-Bestellung (Multi-Connect -> spaeter).
+// ============================================================
 
+// Karten-Zahlung initialisieren -> Stripe-Checkout-URL
+app.post('/api/checkout/stripe/init', async (req, res) => {
+  try {
+    const { order_id, email } = req.body || {};
+    const order = await billingDb.getOrder(order_id);
+    if (!order) return res.status(404).json({ error: 'Bestellung nicht gefunden' });
+    if (order.status === 'paid') return res.status(400).json({ error: 'Bestellung bereits bezahlt' });
+
+    const items = await billingDb.listOrderItems(order.id);
+    if (!items.length) return res.status(400).json({ error: 'Leere Bestellung' });
+
+    const buyerEmail = email || order.email;
+    if (!buyerEmail) return res.status(400).json({ error: 'E-Mail erforderlich' });
+
+    // Ein Haendler pro Stripe-Bestellung (Destination Charge hat genau ein Ziel)
+    const merchantIds = Array.from(new Set(items.filter(i => i.merchant_id).map(i => String(i.merchant_id))));
+    if (merchantIds.length !== 1) {
+      return res.status(400).json({ error: 'Stripe-Checkout unterstuetzt aktuell genau einen Haendler pro Bestellung' });
+    }
+    const acct = await billingDb.getProviderAccount(parseInt(merchantIds[0], 10), 'stripe', 'connect');
+    if (!acct || !acct.external_id) {
+      return res.status(400).json({ error: 'Haendler hat kein verbundenes Stripe-Konto' });
+    }
+
+    const totalCommission = items.reduce((s, i) => s + (Number(i.commission_amount) || 0), 0);
+    const amountCents = Math.round(Number(order.total) * 100);
+    const feeCents = Math.round(totalCommission * 100);
+    const base = process.env.PUBLIC_BASE_URL || 'https://afcarparts.com';
+    const stripe = payments.getProvider('stripe');
+
+    const session = await stripe.createOrderCheckout({
+      order, email: buyerEmail, amountCents, applicationFeeCents: feeCents,
+      destinationAccount: acct.external_id, currency: order.currency || 'usd',
+      successUrl: base + '/?stripe_session={CHECKOUT_SESSION_ID}',
+      cancelUrl: base + '/#cart',
+    });
+
+    await billingDb.recordPayment({
+      orderId: order.id, provider: 'stripe', providerPaymentId: session.id,
+      amount: order.total, currency: order.currency, status: 'pending', method: 'card',
+      raw: { checkout_url: session.url, destination: acct.external_id, fee_cents: feeCents },
+    });
+
+    res.json({ checkout_url: session.url, session_id: session.id });
+  } catch (err) {
+    console.error('[checkout/stripe/init]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Karten-Zahlung verifizieren (nach Rueckkehr)
+app.get('/api/checkout/stripe/verify', async (req, res) => {
+  try {
+    const sessionId = req.query.session_id;
+    if (!sessionId) return res.status(400).json({ error: 'session_id erforderlich' });
+
+    const stripe = payments.getProvider('stripe');
+    const s = await stripe.retrieveCheckoutSession(sessionId);
+    const paid = s.paymentStatus === 'paid';
+    const orderId = parseInt((s.metadata && s.metadata.order_id) || '', 10) || null;
+    const order = orderId ? await billingDb.getOrder(orderId) : null;
+
+    await billingDb.recordPayment({
+      orderId: orderId, provider: 'stripe', providerPaymentId: sessionId,
+      amount: (s.amountTotal ? s.amountTotal / 100 : 0), currency: s.currency || 'usd',
+      status: paid ? 'succeeded' : 'failed', method: 'card', raw: s,
+    });
+
+    if (paid && order && order.status !== 'paid') {
+      await billingDb.setOrderStatus(orderId, 'paid');
+      const items = await billingDb.listOrderItems(orderId);
+      for (const it of items) {
+        if (it.product_id) {
+          await query(`UPDATE products SET stock = GREATEST(COALESCE(stock,0) - $2, 0) WHERE id = $1`, [it.product_id, it.qty || 1]);
+        }
+      }
+      await query(`UPDATE order_items SET payout_status = 'paid' WHERE order_id = $1`, [orderId]);
+
+      const byMerchant = {};
+      for (const it of items) {
+        if (it.merchant_id) byMerchant[it.merchant_id] = (byMerchant[it.merchant_id] || 0) + (Number(it.payout_amount) || 0);
+      }
+      for (const mid of Object.keys(byMerchant)) {
+        await billingDb.recordPayout({
+          merchantId: parseInt(mid, 10), orderId, provider: 'stripe',
+          providerPayoutId: sessionId + ':' + mid, amount: byMerchant[mid],
+          currency: order.currency, status: 'paid', kind: 'destination_charge', raw: { via: 'stripe_verify' },
+        });
+      }
+    }
+
+    res.json({ success: paid, paid, order_id: orderId, status: s.paymentStatus });
+  } catch (err) {
+    console.error('[checkout/stripe/verify]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 /* ============================================================
    CATEGORIES
    ============================================================ */
