@@ -15,6 +15,7 @@ const { uploadToR2, deleteFromR2 } = require('./r2');
 const { query } = require('./db');
 const db = require('./storeDb');
 const billingDb = require('./billingDb');
+const shippingDb = require('./shippingDb');
    const payments = require('./paymentProviders'); // Phase 0: Fundament + Routing
 // === PATCH 1: Auth-Imports ===
 const cookieParser = require('cookie-parser');
@@ -794,6 +795,159 @@ app.get('/api/migrate-orders-fix', async (req, res) => {
     res.json({ ok: true, log, orders_columns: oc.rows });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message, log });
+  }
+});
+// file: server.js — PHASE 0 VERSAND, Block einfuegen
+// Platzierung: direkt UNTERHALB des kompletten /api/migrate-orders-fix-Blocks.
+// Zusaetzlich oben bei den requires (unter `const billingDb = require('./billingDb');`):
+//   const shippingDb = require('./shippingDb');
+// Einmal aufrufen: GET /api/migrate-shipping?secret=MIGRATION_SECRET
+
+/* ============================================================
+   PHASE 0 VERSAND - Schema fuer Sendungen + Abholstationen.
+   - shipments: 1 Zeile pro order_item mit Artikelnummer (product_id),
+     Haendler-ID (seller_user_id) und Kaeufer-ID (buyer_user_id)
+   - pickup_stations: Abholstationen je Land/Stadt (Admin pflegt sie)
+   Idempotent, mehrfach aufrufbar.
+   ============================================================ */
+app.get('/api/migrate-shipping', async (req, res) => {
+  if (!process.env.MIGRATION_SECRET) return res.status(503).json({ error: 'MIGRATION_SECRET not set' });
+  if (req.query.secret !== process.env.MIGRATION_SECRET) return res.status(401).json({ error: 'Invalid secret' });
+
+  const log = [];
+  try {
+    // ID-Typen erkennen (typkompatible Fremdschluessel) - gleiches Muster wie migrate-billing
+    const typeRes = await query(
+      `SELECT table_name, data_type FROM information_schema.columns
+        WHERE table_schema='public' AND column_name='id'
+          AND table_name IN ('users','products')`
+    );
+    const map = {};
+    for (const r of typeRes.rows) map[r.table_name] = r.data_type;
+    const toCol = (dt) => ({ integer: 'INTEGER', bigint: 'BIGINT', smallint: 'SMALLINT', uuid: 'UUID',
+      'character varying': 'TEXT', text: 'TEXT' }[(dt || '').toLowerCase()] || 'BIGINT');
+    const USER_ID = toCol(map['users']);
+    const PRODUCT_ID = toCol(map['products']);
+    log.push(`detected id types: users=${map['users'] || '?'} products=${map['products'] || '?'}`);
+
+    const stmts = [
+      // ABHOLSTATIONEN
+      `CREATE TABLE IF NOT EXISTS pickup_stations (
+         id BIGSERIAL PRIMARY KEY,
+         country TEXT NOT NULL,            -- ISO-2, z. B. 'NG', 'GH', 'CD'
+         city TEXT NOT NULL,
+         name TEXT NOT NULL,
+         address TEXT NOT NULL DEFAULT '',
+         phone TEXT,
+         opening_hours TEXT,
+         active BOOLEAN NOT NULL DEFAULT true,
+         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+       )`,
+
+      // SENDUNGEN (1 pro order_item -> Split-Bestellungen mit mehreren Haendlern moeglich)
+      `CREATE TABLE IF NOT EXISTS shipments (
+         id BIGSERIAL PRIMARY KEY,
+         order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+         order_item_id BIGINT REFERENCES order_items(id) ON DELETE SET NULL,
+         product_id ${PRODUCT_ID} REFERENCES products(id) ON DELETE SET NULL,   -- Artikelnummer
+         seller_user_id ${USER_ID} REFERENCES users(id) ON DELETE SET NULL,     -- Haendler-ID
+         buyer_user_id ${USER_ID} REFERENCES users(id) ON DELETE SET NULL,      -- Kaeufer-ID
+         pickup_station_id BIGINT REFERENCES pickup_stations(id) ON DELETE SET NULL,
+         provider TEXT NOT NULL DEFAULT 'manual'
+           CHECK (provider IN ('manual','shippo','terminal')),
+         provider_shipment_id TEXT,
+         carrier TEXT,
+         tracking_number TEXT,
+         label_url TEXT,
+         status TEXT NOT NULL DEFAULT 'pending'
+           CHECK (status IN ('pending','label_created','shipped','in_transit','delivered','problem','cancelled')),
+         cost_usd NUMERIC(12,2) NOT NULL DEFAULT 0,
+         raw JSONB NOT NULL DEFAULT '{}'::jsonb,
+         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+       )`,
+
+      // INDIZES
+      `CREATE INDEX IF NOT EXISTS idx_pickup_stations_country_city ON pickup_stations (country, city)`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS uniq_shipments_order_item ON shipments (order_item_id) WHERE order_item_id IS NOT NULL`,
+      `CREATE INDEX IF NOT EXISTS idx_shipments_order ON shipments (order_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_shipments_seller ON shipments (seller_user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_shipments_buyer ON shipments (buyer_user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_shipments_status ON shipments (status)`,
+    ];
+
+    for (const sql of stmts) {
+      await query(sql);
+      const m = sql.match(/(?:TABLE|INDEX) IF NOT EXISTS ([a-z_]+)/i);
+      log.push('ok: ' + (m ? m[1] : sql.slice(0, 40)));
+    }
+
+    res.json({ ok: true, message: 'Versand-Schema bereit', log });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message, log });
+  }
+});
+
+/* ============================================================
+   ABHOLSTATIONEN - oeffentlich (Checkout: Kunde waehlt Stadt
+   -> Stationen anzeigen). Frontend-Aufruf (apiReq ohne /api):
+   GET /pickup-stations?country=NG&city=Lagos
+   ============================================================ */
+app.get('/api/pickup-stations', async (req, res) => {
+  try {
+    const stations = await shippingDb.listPickupStations({
+      country: req.query.country,
+      city: req.query.city,
+    });
+    res.json({ stations });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ============================================================
+   ABHOLSTATIONEN - Admin-CRUD (Admin-Modul "Versand")
+   ============================================================ */
+app.get('/api/admin/pickup-stations', requireAdmin, async (req, res) => {
+  try {
+    const stations = await shippingDb.listAllPickupStations();
+    res.json({ stations });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/pickup-stations', requireAdmin, async (req, res) => {
+  try {
+    const { country, city, name } = req.body || {};
+    if (!country || !city || !name) {
+      return res.status(400).json({ error: 'country, city und name sind Pflichtfelder' });
+    }
+    const station = await shippingDb.createPickupStation(req.body);
+    res.status(201).json({ station });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/admin/pickup-stations/:id', requireAdmin, async (req, res) => {
+  try {
+    const station = await shippingDb.updatePickupStation(parseInt(req.params.id, 10), req.body || {});
+    if (!station) return res.status(404).json({ error: 'Station nicht gefunden' });
+    res.json({ station });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/admin/pickup-stations/:id', requireAdmin, async (req, res) => {
+  try {
+    const ok = await shippingDb.deletePickupStation(parseInt(req.params.id, 10));
+    if (!ok) return res.status(404).json({ error: 'Station nicht gefunden' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 // ============================================================
