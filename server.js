@@ -103,6 +103,7 @@ app.post('/api/paystack/webhook', express.raw({ type: '*/*' }), async (req, res)
     // Nur einmal verarbeiten (Bestellstatus als Idempotenz-Schutz)
     if (order && order.status !== 'paid') {
       await billingDb.setOrderStatus(orderId, 'paid');
+      await shippingDb.createShipmentsForPaidOrder(orderId).catch((e) => console.error('[shipping]', e.message));
       const items = await billingDb.listOrderItems(orderId);
 
       for (const it of items) {
@@ -153,6 +154,7 @@ async function handleStripeOrderPaid(evt) {
   });
 
   await billingDb.setOrderStatus(orderId, 'paid');
+  await shippingDb.createShipmentsForPaidOrder(orderId).catch((e) => console.error('[shipping]', e.message));
   const items = await billingDb.listOrderItems(orderId);
 
   for (const it of items) {
@@ -946,6 +948,19 @@ app.delete('/api/admin/pickup-stations/:id', requireAdmin, async (req, res) => {
     const ok = await shippingDb.deletePickupStation(parseInt(req.params.id, 10));
     if (!ok) return res.status(404).json({ error: 'Station nicht gefunden' });
     res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+// Admin: Sendungsliste (Filter: ?status=pending&seller_user_id=&page=)
+app.get('/api/admin/shipments', requireAdmin, async (req, res) => {
+  try {
+    const shipments = await shippingDb.listShipments({
+      status: req.query.status,
+      sellerUserId: req.query.seller_user_id ? parseInt(req.query.seller_user_id, 10) : undefined,
+      page: parseInt(req.query.page, 10) || 1,
+    });
+    res.json({ shipments });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -2410,6 +2425,7 @@ app.get('/api/checkout/stripe/verify', async (req, res) => {
 
     if (paid && order && order.status !== 'paid') {
       await billingDb.setOrderStatus(orderId, 'paid');
+      await shippingDb.createShipmentsForPaidOrder(orderId).catch((e) => console.error('[shipping]', e.message));
       const items = await billingDb.listOrderItems(orderId);
       for (const it of items) {
         if (it.product_id) {
@@ -2596,6 +2612,7 @@ app.get('/api/checkout/paystack/verify', async (req, res) => {
     // Nur einmal verarbeiten (Idempotenz ueber Bestellstatus)
     if (success && order && order.status !== 'paid') {
       await billingDb.setOrderStatus(orderId, 'paid');
+      await shippingDb.createShipmentsForPaidOrder(orderId).catch((e) => console.error('[shipping]', e.message));
       const items = await billingDb.listOrderItems(orderId);
 
       // Bestand abbuchen
