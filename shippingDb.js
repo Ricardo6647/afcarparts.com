@@ -100,7 +100,7 @@ async function createShipmentsForPaidOrder(orderId) {
      JOIN order_items oi ON oi.order_id = o.id
      LEFT JOIN products p ON p.id = oi.product_id
      WHERE o.id = $1 AND o.status = 'paid'
-     ON CONFLICT (order_item_id) DO NOTHING
+     ON CONFLICT (order_item_id) WHERE order_item_id IS NOT NULL DO NOTHING
      RETURNING id`,
     [orderId]
   );
