@@ -3605,6 +3605,21 @@ route('checkout', async function () {
   h += '<div class="fg"><label>' + t('checkout.city') + '</label><input id="coCity"/></div>';
   h += '<div class="fg"><label>' + t('checkout.country') + '</label><input id="coCountry" value="' + esc(S.user && S.user.country || '') + '"/></div>';
   h += '<div class="fg"><label>' + t('checkout.addr') + '</label><textarea id="coAddr"></textarea></div>';
+  // --- ABHOLSTATION (Phase 1 Versand): Auswahl erscheint, sobald der Kunde seine Stadt eintippt ---
+  var PU = ({
+    en: { title: 'Pickup station (optional)', none: 'No pickup station — deliver to my address', hint: 'Enter your city above to see available pickup stations.' },
+    de: { title: 'Abholstation (optional)', none: 'Keine Abholstation — an meine Adresse liefern', hint: 'Stadt oben eingeben, um verfügbare Abholstationen zu sehen.' },
+    fr: { title: 'Point de retrait (optionnel)', none: 'Pas de point de retrait — livrer à mon adresse', hint: 'Saisissez votre ville ci-dessus pour voir les points de retrait.' },
+    pt: { title: 'Estação de levantamento (opcional)', none: 'Sem estação — entregar no meu endereço', hint: 'Digite a sua cidade acima para ver as estações disponíveis.' },
+    es: { title: 'Punto de recogida (opcional)', none: 'Sin punto de recogida — entregar en mi dirección', hint: 'Escriba su ciudad arriba para ver los puntos disponibles.' },
+    ar: { title: 'محطة الاستلام (اختياري)', none: 'بدون محطة استلام — التوصيل إلى عنواني', hint: 'أدخل مدينتك أعلاه لعرض محطات الاستلام المتاحة.' },
+    tr: { title: 'Teslim alma noktası (isteğe bağlı)', none: 'Nokta yok — adresime teslim edin', hint: 'Mevcut noktaları görmek için yukarıya şehrinizi yazın.' },
+    sw: { title: 'Kituo cha kuchukua (hiari)', none: 'Bila kituo — leta kwa anwani yangu', hint: 'Andika jiji lako hapo juu kuona vituo vilivyopo.' },
+    ln: { title: 'Esika ya kozwa biloko (soki olingi)', none: 'Esika te — bomemela ngai na adresse na ngai', hint: 'Koma engumba na yo likolo mpo na komona bisika.' }
+  })[S.lang] || { title: 'Pickup station (optional)', none: 'No pickup station — deliver to my address', hint: 'Enter your city above to see available pickup stations.' };
+  h += '<h3 style="margin-top:1rem">' + PU.title + '</h3>';
+  h += '<div class="fg"><select id="coStation"><option value="">' + PU.none + '</option></select>';
+  h += '<div id="coStationHint" style="font-size:.85rem;color:#777;margin-top:.3rem">' + PU.hint + '</div></div>';
 
   h += '<h3 style="margin-top:1rem">' + t('checkout.shipping') + '</h3>';
   h += '<div class="fg"><select id="coShip"><option value="">-- ' + t('checkout.shipping') + ' --</option>';
@@ -3632,6 +3647,35 @@ route('checkout', async function () {
   h += '</div></div>';
 
   $('content').innerHTML = h;
+   // Abholstationen laden, sobald Stadt/Land getippt werden (Phase 1 Versand)
+  var coStTimer = null;
+  async function coLoadStations() {
+    var cityEl = $('coCity'), sel = $('coStation');
+    if (!cityEl || !sel) return;
+    var city = cityEl.value.trim();
+    if (city.length < 2) return;
+    var countryRaw = ($('coCountry') && $('coCountry').value.trim()) || '';
+    var cmap = { 'nigeria': 'NG', 'ghana': 'GH', 'kenya': 'KE', 'kenia': 'KE', 'senegal': 'SN', 'south africa': 'ZA', 'suedafrika': 'ZA', 'cote d\'ivoire': 'CI', 'ivory coast': 'CI', 'cameroon': 'CM', 'kamerun': 'CM', 'congo': 'CD', 'dr congo': 'CD', 'drc': 'CD', 'tanzania': 'TZ', 'tansania': 'TZ', 'uganda': 'UG', 'togo': 'TG', 'benin': 'BJ' };
+    var country = countryRaw.length === 2 ? countryRaw.toUpperCase() : (cmap[countryRaw.toLowerCase()] || '');
+    try {
+      var q = '/pickup-stations?city=' + encodeURIComponent(city) + (country ? '&country=' + country : '');
+      var r = await apiReq(q, 'GET', null, false);
+      var stations = (r && r.stations) || [];
+      var first = sel.options[0] ? sel.options[0].outerHTML : '<option value=""></option>';
+      sel.innerHTML = first + stations.map(function (s) {
+        return '<option value="' + s.id + '">' + esc(s.name) + ' — ' + esc(s.address) + (s.opening_hours ? ' (' + esc(s.opening_hours) + ')' : '') + '</option>';
+      }).join('');
+      var hint = $('coStationHint');
+      if (hint) hint.style.display = stations.length ? 'none' : '';
+    } catch (e) { /* Stationssuche darf den Checkout nie stoeren */ }
+  }
+  ['coCity', 'coCountry'].forEach(function (id) {
+    var el = $(id);
+    if (el) el.addEventListener('input', function () {
+      clearTimeout(coStTimer);
+      coStTimer = setTimeout(coLoadStations, 400);
+    });
+  });
 
   window.placeOrder = async function () {
     const name = $('coName') && $('coName').value.trim();
@@ -3642,6 +3686,7 @@ route('checkout', async function () {
     const ship = $('coShip') && $('coShip').value;
     const pay = $('coPay') && $('coPay').value;
     const email = ($('coEmail') && $('coEmail').value.trim()) || (S.user && S.user.email) || '';
+     const stationId = ($('coStation') && $('coStation').value) || '';
 
     if (!name || !phone || !city || !country || !addr || !ship) {
       toast(t('checkout.select_ship'), 't-error');
@@ -3651,7 +3696,7 @@ route('checkout', async function () {
     try {
       const r = await apiReq('/orders', 'POST', {
         items: S.cart, shipping: ship, payment: pay,
-        address: { name: name, phone: phone, city: city, country: country, addr: addr, email: email },
+        address: { name: name, phone: phone, city: city, country: country, addr: addr, email: email, pickup_station_id: stationId },
         user: S.user
       }, false);
       const orderId = r && r.order && r.order.id;
