@@ -140,6 +140,20 @@ async function listShipments({ status, sellerUserId, buyerUserId, page = 1, perP
   return r.rows;
 }
 
+// Eine einzelne Sendung des Haendlers laden (inkl. Stationsdaten fuer das Label).
+// Liefert null, wenn die Sendung nicht existiert oder einem anderen Haendler gehoert.
+async function getSellerShipment(id, sellerUserId) {
+  const r = await query(
+    `SELECT s.*, ps.name AS pickup_station_name, ps.city AS pickup_station_city,
+            ps.address AS pickup_station_address, ps.country AS pickup_station_country
+       FROM shipments s
+       LEFT JOIN pickup_stations ps ON ps.id = s.pickup_station_id
+      WHERE s.id = $1 AND s.seller_user_id = $2`,
+    [id, sellerUserId]
+  );
+  return r.rows[0] || null;
+}
+
 async function setShipmentStatus(id, status) {
   const r = await query(
     `UPDATE shipments SET status = $2, updated_at = now() WHERE id = $1 RETURNING *`,
@@ -191,6 +205,7 @@ module.exports = {
   deletePickupStation,
   createShipmentsForPaidOrder,
   getShipmentsByOrder,
+  getSellerShipment,
   listShipments,
   setShipmentStatus,
   setShipmentTracking,
