@@ -52,4 +52,4 @@ function requireRole(...roles) {
   };
 }
 
-module.exports = { signAccessToken, verifyAccessToken, requireAuth, optionalAuth, requireRole };uth, requireRole };
+module.exports = { signAccessToken, verifyAccessToken, requireAuth, optionalAuth, requireRole };
