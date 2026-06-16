@@ -129,9 +129,22 @@ async function listShipments({ status, sellerUserId, buyerUserId, page = 1, perP
   const offset = (Math.max(1, page) - 1) * perPage;
   params.push(perPage, offset);
   const r = await query(
-    `SELECT s.*, ps.name AS pickup_station_name, ps.city AS pickup_station_city
+    `SELECT s.*, ps.name AS pickup_station_name, ps.city AS pickup_station_city,
+            oi.title       AS product_title,
+            oi.qty         AS product_qty,
+            oi.unit_price  AS product_unit_price,
+            oi.line_total  AS product_line_total,
+            o.address      AS order_address,
+            o.currency     AS order_currency,
+            o.email        AS order_email,
+            bu.name        AS buyer_name,
+            bu.email       AS buyer_email,
+            bu.phone       AS buyer_phone
        FROM shipments s
        LEFT JOIN pickup_stations ps ON ps.id = s.pickup_station_id
+       LEFT JOIN order_items     oi ON oi.id = s.order_item_id
+       LEFT JOIN orders           o ON o.id  = s.order_id
+       LEFT JOIN users           bu ON bu.id = s.buyer_user_id
       ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
       ORDER BY s.created_at DESC
       LIMIT $${params.length - 1} OFFSET $${params.length}`,
