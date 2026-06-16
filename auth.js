@@ -2,7 +2,7 @@
 const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = process.env.JWT_SECRET;
-const ACCESS_TOKEN_TTL = '15m';
+const ACCESS_TOKEN_TTL = '30d';   // Haendler bleiben im Dashboard eingeloggt (war 15m)
 
 if (!JWT_SECRET) {
   console.error('FATAL: JWT_SECRET environment variable not set');
@@ -52,4 +52,4 @@ function requireRole(...roles) {
   };
 }
 
-module.exports = { signAccessToken, verifyAccessToken, requireAuth, optionalAuth, requireRole };
+module.exports = { signAccessToken, verifyAccessToken, requireAuth, optionalAuth, requireRole };uth, requireRole };
