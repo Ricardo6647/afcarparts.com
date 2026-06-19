@@ -3191,6 +3191,22 @@ app.get('/api/products', async (req, res) => {
     if (sort === 'price_asc') orderBy = 'p.price_usd ASC';
     else if (sort === 'price_desc') orderBy = 'p.price_usd DESC';
     else if (sort === 'popular') orderBy = 'p.view_count DESC, p.created_at DESC';
+    else if (sort === 'boost') {
+      // Bestseller-Boost-Score = Verkäufe (stark) + Klicks + Recency-Bonus für neue Teile.
+      // Gewichte frei justierbar:
+      const W_SALES = 10;       // Punkte pro verkaufter Einheit
+      const W_VIEWS = 1;        // Punkte pro Produktaufruf (view_count)
+      const RECENCY_DAYS = 14;  // so viele Tage bekommen neue Produkte einen Bonus
+      const W_RECENCY = 3;      // Bonus-Stärke pro verbleibendem Tag (Start: 14*3 = 42 Punkte ≈ 4 Verkäufe)
+      orderBy = `(
+        COALESCE((SELECT SUM(oi.qty) FROM order_items oi
+                  JOIN orders o ON o.id = oi.order_id
+                  WHERE oi.product_id = p.id
+                    AND o.status IN ('paid','fulfilled')), 0) * ${W_SALES}
+        + COALESCE(p.view_count, 0) * ${W_VIEWS}
+        + GREATEST(0, ${RECENCY_DAYS} - EXTRACT(EPOCH FROM (now() - p.created_at)) / 86400.0) * ${W_RECENCY}
+      ) DESC, p.created_at DESC`;
+    }
     // COUNT-Query nutzt params.slice(1) (ohne lang) — daher Platzhalter $2→$1, $3→$2 etc. umnummerieren
     const countWhere = where.replace(/\$(\d+)/g, (_, n) => '$' + (parseInt(n, 10) - 1));
     const countRes = await query(`SELECT COUNT(*) AS c FROM products p ${countWhere}`, params.slice(1));
