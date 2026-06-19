@@ -3078,7 +3078,22 @@ app.get('/api/admin/shops', requireAdmin, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
+app.put('/api/admin/shops/:id/kyc', requireAdmin, async (req, res) => {
+  const { status } = req.body || {};
+  const allowed = ['none', 'pending', 'verified', 'rejected'];
+  if (!allowed.includes(status)) return res.status(400).json({ error: 'Ungültiger Status' });
+  try {
+    const shop = await query('SELECT owner_id FROM shops WHERE id = $1', [req.params.id]);
+    if (!shop.rows.length) return res.status(404).json({ error: 'Shop nicht gefunden' });
+    const ownerId = shop.rows[0].owner_id;
+    if (!ownerId) return res.status(400).json({ error: 'Kein verknüpfter Händler-Account (owner_id fehlt).' });
+    await billingDb.ensureMerchant(ownerId);
+    await query('UPDATE merchants SET kyc_status = $1, updated_at = now() WHERE user_id = $2', [status, ownerId]);
+    res.json({ success: true, kyc_status: status });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 app.post('/api/admin/shops', requireAdmin, async (req, res) => {
   const { name, slug, owner_id, country, city, email, phone, is_china, logo_url, tax_number, translations } = req.body || {};
   if (!name || !name.trim()) return res.status(400).json({ error: 'Missing shop name' });
