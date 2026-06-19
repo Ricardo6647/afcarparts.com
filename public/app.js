@@ -2435,7 +2435,7 @@ route('home', async function () {
   let prods = [], cats = [], cnProds = [], shops = [], shopsGeo = {};
   try {
     const arr = await Promise.all([
-      apiReq('/products?limit=8', 'GET', null, false).catch(() => ({ data: [] })),
+      apiReq('/products?limit=8&sort=boost', 'GET', null, false).catch(() => ({ data: [] })),
       apiReq('/categories?lang=' + S.lang, 'GET', null, false).catch(() => []),
       apiReq('/products?limit=4&wholesale=1', 'GET', null, false).catch(() => ({ data: [] })),
       apiReq('/shops?near=1&limit=6', 'GET', null, false).catch(() => ({ data: [] }))
