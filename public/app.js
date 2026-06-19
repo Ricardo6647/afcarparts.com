@@ -5749,6 +5749,13 @@ route('admin-shops', async function () {
     h += '<button class="btn btn-ghost btn-sm" onclick="shToggle(\'' + s.id + '\',' + (!s.active) + ')">' + (s.active ? 'Deaktivieren' : 'Freigeben') + '</button>';
     h += '<button class="btn btn-ghost btn-sm" onclick="shView(\'' + esc(String(s.slug || s.id)) + '\')">Ansehen</button>';
     h += '<button class="btn btn-ghost btn-sm" onclick="shTax(\'' + s.id + '\')">Steuernr.</button>';
+    var ky = s.kyc_status || 'none';
+    h += '<select onchange="shKyc(\'' + s.id + '\',this.value)" style="font-size:.78rem;padding:5px 7px;border:1px solid #d6dae1;border-radius:7px;background:#fff;cursor:pointer">';
+    h += '<option value="verified"' + (ky === 'verified' ? ' selected' : '') + '>✓ Verifiziert</option>';
+    h += '<option value="pending"' + (ky === 'pending' ? ' selected' : '') + '>⏳ Ausstehend</option>';
+    h += '<option value="rejected"' + (ky === 'rejected' ? ' selected' : '') + '>✕ Abgelehnt</option>';
+    h += '<option value="none"' + (ky === 'none' ? ' selected' : '') + '>— Nicht verifiziert</option>';
+    h += '</select>';
     h += '<button class="btn btn-ghost btn-sm" style="color:#c33" onclick="shDelete(\'' + s.id + '\')">Löschen</button>';
     h += '</div></div>';
     return h;
@@ -5801,6 +5808,11 @@ route('admin-shops', async function () {
     catch (e) { toast(e.message || 'Error', 't-error'); }
   };
   window.shView = function (slugOrId) { render('shop', { id: slugOrId }); };
+  window.shKyc = async function (id, status) {
+    if (!status) return;
+    try { await apiReq('/admin/shops/' + id + '/kyc', 'PUT', { status: status }, true); toast('Verifizierung aktualisiert'); loadList(); }
+    catch (e) { toast(e.message || 'Error', 't-error'); }
+  };
   window.shTax = async function (id) {
     var cur = (allShops.filter(function (x) { return String(x.id) === String(id); })[0] || {}).tax_number || '';
     var val = prompt('Steuernummer (leer lassen zum Entfernen):', cur);
