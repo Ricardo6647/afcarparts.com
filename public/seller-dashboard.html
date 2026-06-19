@@ -1,0 +1,2725 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Händler-Dashboard | AFRICARPARTS</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --danger: #dc2626;
+      --danger-hover: #b91c1c;
+      --success: #16a34a;
+      --bg: #f3f4f6;
+      --card: #ffffff;
+      --border: #e5e7eb;
+      --text: #111827;
+      --text-muted: #6b7280;
+      --shadow: 0 1px 3px rgba(0,0,0,.08);
+      --radius: 8px;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+    
+    .hidden { display: none !important; }
+
+    /* ===== LANGUAGE SWITCHER ===== */
+    .lang-switcher {
+      display: inline-block;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 2px;
+    }
+    .lang-switcher select {
+      border: none;
+      background: transparent;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 4px 8px;
+      color: var(--text);
+      outline: none;
+    }
+    /* Variant for login screen: top-right of login card */
+    .login-card .lang-switcher {
+      float: right;
+      margin-bottom: 8px;
+    }
+    
+    /* ===== LOGIN SCREEN ===== */
+    #login-screen {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    
+    .login-card {
+      background: var(--card);
+      padding: 40px;
+      border-radius: var(--radius);
+      box-shadow: 0 4px 20px rgba(0,0,0,.1);
+      width: 100%;
+      max-width: 420px;
+    }
+    
+    .login-card h1 {
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+    
+    .login-card .subtitle {
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      font-size: 14px;
+    }
+    
+    /* TABS */
+    .tabs {
+      display: flex;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+      gap: 4px;
+    }
+    .tab {
+      flex: 1;
+      padding: 10px 0;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      transition: all .15s;
+      font-family: inherit;
+    }
+    .tab.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+    .tab:hover:not(.active) {
+      color: var(--text);
+    }
+    
+    /* ===== FORMS ===== */
+    .form-group {
+      margin-bottom: 16px;
+    }
+    
+    .form-group label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+    
+    .form-group .hint {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    
+    input[type="text"], input[type="email"], input[type="password"],
+    input[type="number"], select, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-family: inherit;
+      background: var(--card);
+      transition: border-color .15s;
+    }
+    
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+    }
+    
+    textarea { resize: vertical; min-height: 80px; }
+    
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    
+    /* ===== BUTTONS ===== */
+    button, .btn {
+      padding: 10px 16px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background .15s;
+      font-family: inherit;
+    }
+    
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+    
+    .btn-secondary {
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { background: var(--bg); }
+    
+    .btn-danger {
+      background: var(--danger);
+      color: white;
+    }
+    .btn-danger:hover { background: var(--danger-hover); }
+    
+    .btn-block { width: 100%; }
+    
+    .btn-sm { padding: 6px 10px; font-size: 13px; }
+    
+    /* ===== ALERTS ===== */
+    .alert {
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      margin: 12px 0;
+    }
+    .alert-error {
+      background: #fef2f2;
+      color: var(--danger);
+      border: 1px solid #fecaca;
+    }
+    .alert-success {
+      background: #f0fdf4;
+      color: var(--success);
+      border: 1px solid #bbf7d0;
+    }
+    
+    /* ===== HEADER ===== */
+    header {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    
+    header .brand {
+      font-weight: 700;
+      font-size: 18px;
+      color: var(--primary);
+    }
+    
+    header .user-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 14px;
+    }
+    
+    header .user-email {
+      color: var(--text-muted);
+    }
+    
+    header .user-role {
+      background: var(--bg);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    
+    /* ===== MAIN ===== */
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    
+    .section-header h2 {
+      font-size: 22px;
+      font-weight: 600;
+    }
+    
+    /* ===== TABLE ===== */
+    .products-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    
+    table th {
+      background: var(--bg);
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      color: var(--text-muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    table td {
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    
+    table tbody tr:hover { background: #fafafa; }
+    table tbody tr:last-child td { border-bottom: none; }
+    
+    .product-thumb {
+      width: 50px;
+      height: 50px;
+      object-fit: cover;
+      border-radius: 4px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+    }
+    
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    
+    .badge-active { background: #dcfce7; color: #166534; }
+    .badge-inactive { background: #fee2e2; color: #991b1b; }
+    
+    .table-actions {
+      display: flex;
+      gap: 6px;
+    }
+    
+    .empty-state {
+      padding: 60px 20px;
+      text-align: center;
+      color: var(--text-muted);
+    }
+    
+    .loading {
+      padding: 40px;
+      text-align: center;
+      color: var(--text-muted);
+    }
+    
+    /* ===== MODAL ===== */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 20px;
+    }
+    
+    .modal {
+      background: var(--card);
+      border-radius: var(--radius);
+      width: 100%;
+      max-width: 720px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,.2);
+    }
+    
+    .modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      background: var(--card);
+      z-index: 1;
+    }
+    
+    .modal-header h3 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+    
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: var(--text-muted);
+      padding: 0;
+      width: 32px;
+      height: 32px;
+    }
+    
+    .modal-body {
+      padding: 24px;
+    }
+    
+    .modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      position: sticky;
+      bottom: 0;
+      background: var(--card);
+    }
+    
+    /* ===== IMAGE UPLOAD ===== */
+    .image-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 12px;
+      margin-top: 8px;
+    }
+    
+    .image-thumb {
+      position: relative;
+      aspect-ratio: 1;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--bg);
+    }
+    
+    .image-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    
+    .image-thumb .remove-img {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      background: rgba(0,0,0,.6);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+    }
+    
+    .image-upload-btn {
+      aspect-ratio: 1;
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      background: var(--bg);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      font-size: 13px;
+      gap: 4px;
+      transition: border-color .15s;
+    }
+    
+    .image-upload-btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+    
+    /* ===== ACCORDION (Übersetzungen) ===== */
+    .accordion {
+      margin-top: 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    
+    .accordion-header {
+      padding: 10px 14px;
+      background: var(--bg);
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .accordion-content {
+      padding: 14px;
+      border-top: 1px solid var(--border);
+    }
+    
+    .accordion.closed .accordion-content { display: none; }
+    .accordion.closed .accordion-arrow { transform: rotate(-90deg); }
+    
+    .accordion-arrow { transition: transform .15s; }
+    
+    /* Mobile */
+    @media (max-width: 640px) {
+      .form-row { grid-template-columns: 1fr; }
+      header { padding: 10px 14px; }
+      header .user-email { display: none; }
+      main { padding: 14px; }
+      table th:nth-child(3), table td:nth-child(3),
+      table th:nth-child(4), table td:nth-child(4) { display: none; }
+    }
+
+    /* ============================================================
+       ONBOARDING-TOUR: Layout (Formular + Tour nebeneinander)
+       ============================================================ */
+    .auth-layout {
+      display: flex;
+      gap: 28px;
+      align-items: stretch;
+      justify-content: center;
+      flex-wrap: wrap;
+      width: 100%;
+      max-width: 980px;
+    }
+    .auth-layout .login-card { margin: 0; flex: 0 1 420px; }
+
+    .tour-cta-panel {
+      flex: 0 1 380px;
+      align-self: stretch;
+      background: linear-gradient(160deg,#003057 0%,#06223b 58%,#0a2d4d 100%);
+      color: #fff;
+      border-radius: var(--radius);
+      padding: 34px 30px;
+      box-shadow: 0 4px 20px rgba(0,0,0,.14);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 15px;
+      position: relative;
+      overflow: hidden;
+    }
+    .tour-cta-panel::after {
+      content: ""; position: absolute; right: -42px; top: -42px;
+      width: 170px; height: 170px;
+      background: radial-gradient(circle,#ED280733,transparent 70%);
+      pointer-events: none;
+    }
+    .tour-cta-panel .tp-kicker {
+      font-size: 12px; font-weight: 700; letter-spacing: .12em;
+      text-transform: uppercase; color: #ED2807;
+    }
+    .tour-cta-panel h2 { font-size: 23px; line-height: 1.2; font-weight: 800; margin: 0; }
+    .tour-cta-panel .tp-sub { font-size: 14px; line-height: 1.55; color: #c8d4e2; margin: 0; }
+    .tour-cta-panel .tp-steps {
+      list-style: none; margin: 4px 0 0; padding: 0;
+      display: flex; flex-direction: column; gap: 9px;
+    }
+    .tour-cta-panel .tp-steps li {
+      font-size: 13.5px; color: #e3ebf4;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .tour-cta-panel .tp-steps li b {
+      width: 22px; height: 22px; flex: none; border-radius: 50%;
+      background: #ED2807; color: #fff; font-size: 12px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .tour-cta-btn {
+      margin-top: 8px; appearance: none; border: none; cursor: pointer;
+      background: #ED2807; color: #fff; font-weight: 700; font-size: 15px;
+      padding: 13px 18px; border-radius: 10px;
+      display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+      transition: background .15s, transform .1s; font-family: inherit;
+    }
+    .tour-cta-btn:hover { background: #C8210A; }
+    .tour-cta-btn:active { transform: translateY(1px); }
+    .tour-cta-note { font-size: 12px; color: #9fb0c2; text-align: center; margin: 2px 0 0; }
+
+    @media (max-width: 860px) {
+      .auth-layout { flex-direction: column; align-items: center; gap: 20px; }
+      .auth-layout .login-card,
+      .auth-layout .tour-cta-panel { flex: 1 1 auto; width: 100%; max-width: 440px; }
+      .tour-cta-panel { padding: 26px 22px; }
+    }
+
+    /* ============================================================
+       ONBOARDING-TOUR: Modal + Animation
+       ============================================================ */
+    #tour-modal {
+      position: fixed; inset: 0; z-index: 1000; display: none;
+      align-items: center; justify-content: center; padding: 20px;
+      background: rgba(8,16,30,.74); backdrop-filter: blur(3px);
+    }
+    #tour-modal.open { display: flex; }
+    .tour-shell { position: relative; width: 100%; max-width: 840px; }
+    .tour-close {
+      position: absolute; top: -14px; right: -8px; z-index: 6;
+      width: 38px; height: 38px; border-radius: 50%; border: none; cursor: pointer;
+      background: #fff; color: #14181F; font-size: 22px; line-height: 1;
+      box-shadow: 0 6px 18px rgba(0,0,0,.28);
+    }
+    .tour-stage-wrap {
+      background: #e7eaf0; border-radius: 16px; padding: 14px;
+      box-shadow: 0 30px 80px rgba(0,0,0,.4);
+    }
+    .tour-bar { display: flex; align-items: center; gap: 12px; padding: 2px 6px 11px; }
+    .tour-step-label {
+      font-family: 'Barlow Condensed', sans-serif; font-weight: 700;
+      font-size: 14px; letter-spacing: .05em; color: #003057; white-space: nowrap;
+    }
+    .tour-progress { flex: 1; height: 6px; background: #d4d9e3; border-radius: 99px; overflow: hidden; }
+    .tour-progress > i { display: block; height: 100%; width: 0; background: #ED2807; border-radius: 99px; transition: width .5s ease; }
+    .tour-replay {
+      border: 1px solid #cdd5e0; background: #fff; border-radius: 8px;
+      padding: 5px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+      color: #003057; font-family: inherit;
+    }
+    .tour-frame { position: relative; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(16,28,52,.14); }
+    .tour-frame .tf-top { height: 38px; background: #f5f6f9; border-bottom: 1px solid #e2e5ec; display: flex; align-items: center; gap: 8px; padding: 0 14px; }
+    .tour-frame .tf-dots { display: flex; gap: 6px; }
+    .tour-frame .tf-dots i { width: 10px; height: 10px; border-radius: 50%; display: block; }
+    .tour-frame .tf-url {
+      flex: 1; max-width: 300px; margin-left: 8px; height: 22px;
+      background: #fff; border: 1px solid #e2e5ec; border-radius: 7px;
+      display: flex; align-items: center; gap: 6px; padding: 0 10px;
+      font-size: 12px; color: #6b7385;
+    }
+    .tour-screens { position: relative; height: 384px; overflow: hidden; font-family: 'Barlow', sans-serif; color: #14181F; }
+    .tour-screen {
+      position: absolute; inset: 0; opacity: 0; transform: translateX(26px);
+      transition: opacity .45s ease, transform .45s ease; pointer-events: none; overflow: hidden;
+    }
+    .tour-screen.active { opacity: 1; transform: none; }
+    .tour-cursor {
+      position: absolute; left: 0; top: 0; width: 24px; height: 24px; z-index: 30;
+      transition: left .8s cubic-bezier(.5,.05,.2,1), top .8s cubic-bezier(.5,.05,.2,1);
+      pointer-events: none; filter: drop-shadow(0 2px 3px rgba(0,0,0,.32));
+    }
+    .tour-cursor.clicking { transform: scale(.82); }
+    .tour-ripple { position: absolute; z-index: 25; width: 34px; height: 34px; border-radius: 50%; background: #ED280766; pointer-events: none; transform: translate(-50%,-50%) scale(.3); opacity: 0; }
+    .tour-ripple.go { animation: tourRipple .5s ease-out; }
+    @keyframes tourRipple { 0% { transform: translate(-50%,-50%) scale(.3); opacity: .6; } 100% { transform: translate(-50%,-50%) scale(2.6); opacity: 0; } }
+    .tour-caption {
+      position: absolute; z-index: 28; max-width: 235px;
+      background: #003057; color: #fff; font-size: 13px; line-height: 1.4;
+      padding: 9px 12px; border-radius: 10px; box-shadow: 0 8px 22px rgba(0,0,0,.28);
+      opacity: 0; transform: translate(-50%,-100%) translateY(8px);
+      transition: opacity .3s, transform .3s; pointer-events: none;
+    }
+    .tour-caption.show { opacity: 1; transform: translate(-50%,-100%); }
+    .tour-caption::after { content: ""; position: absolute; left: 50%; bottom: -6px; width: 12px; height: 12px; background: #003057; transform: translateX(-50%) rotate(45deg); }
+    .tk-press { transform: scale(.96); transition: transform .12s; }
+    @media (max-width: 560px) { .tour-screens { height: 348px; } .tour-caption { max-width: 180px; font-size: 12px; } }
+
+  </style>
+</head>
+<body>
+
+<!-- ============================================================
+     LOGIN / REGISTER SCREEN
+     ============================================================ -->
+<div id="login-screen">
+  <div class="auth-layout">
+  <div class="login-card">
+    <div class="lang-switcher">
+      <select class="lang-select" aria-label="Language">
+        <option value="de">🇩🇪 Deutsch</option>
+        <option value="en">🇬🇧 English</option>
+        <option value="fr">🇫🇷 Français</option>
+        <option value="pt">🇵🇹 Português</option>
+        <option value="es">🇪🇸 Español</option>
+      </select>
+    </div>
+    <div style="clear:both"></div>
+    <h1 data-i18n="auth.title">Händler-Bereich</h1>
+    <p class="subtitle" data-i18n="auth.subtitle">Melde dich an oder registriere dich als Händler.</p>
+    
+    <div class="tabs">
+      <button type="button" class="tab active" data-tab="login" data-i18n="auth.tab_login">Anmelden</button>
+      <button type="button" class="tab" data-tab="register" data-i18n="auth.tab_register">Registrieren</button>
+    </div>
+    
+    <!-- LOGIN -->
+    <form id="login-form">
+      <div class="form-group">
+        <label for="login-email" data-i18n="auth.email">E-Mail</label>
+        <input type="email" id="login-email" required autocomplete="email">
+      </div>
+      
+      <div class="form-group">
+        <label for="login-password" data-i18n="auth.password">Passwort</label>
+        <input type="password" id="login-password" required autocomplete="current-password">
+      </div>
+      
+      <div id="login-error" class="alert alert-error hidden"></div>
+      
+      <button type="submit" class="btn btn-primary btn-block" id="login-submit" data-i18n="auth.sign_in">
+        Einloggen
+      </button>
+    </form>
+    
+    <!-- REGISTER (initially hidden) -->
+    <form id="register-form" class="hidden">
+      <div class="form-group">
+        <label for="reg-name" data-i18n="auth.name_company">Name oder Firma *</label>
+        <input type="text" id="reg-name" required maxlength="100" autocomplete="name">
+      </div>
+      
+      <div class="form-group">
+        <label for="reg-email" data-i18n="auth.email_required">E-Mail *</label>
+        <input type="email" id="reg-email" required autocomplete="email">
+      </div>
+      
+      <div class="form-group">
+        <label for="reg-password" data-i18n="auth.password_required">Passwort *</label>
+        <input type="password" id="reg-password" required minlength="8" autocomplete="new-password">
+        <div class="hint" data-i18n="auth.password_hint">Mindestens 8 Zeichen.</div>
+      </div>
+      
+      <div class="form-row">
+        <div class="form-group">
+          <label for="reg-phone" data-i18n="auth.phone">WhatsApp / Telefon</label>
+          <input type="text" id="reg-phone" maxlength="50" placeholder="+233 ..." autocomplete="tel">
+        </div>
+        <div class="form-group">
+          <label for="reg-country" data-i18n="auth.country">Land</label>
+          <input type="text" id="reg-country" maxlength="50" data-i18n-placeholder="auth.country_placeholder" placeholder="z.B. Ghana">
+        </div>
+      </div>
+      
+      <div id="register-error" class="alert alert-error hidden"></div>
+      
+      <button type="submit" class="btn btn-primary btn-block" id="register-submit" data-i18n="auth.register_as_dealer">
+        Als Händler registrieren
+      </button>
+      
+      <p style="font-size: 12px; color: var(--text-muted); margin-top: 12px; text-align: center;" data-i18n="auth.register_note">
+        Mit der Registrierung wirst du als Händler freigeschaltet und kannst sofort Produkte einstellen.
+      </p>
+    </form>
+  </div>
+
+  <aside class="tour-cta-panel">
+    <div class="tp-kicker" data-tp="kicker">In 2 Minuten startklar</div>
+    <h2 data-tp="head">So wirst du Händler – Schritt für Schritt</h2>
+    <p class="tp-sub" data-tp="sub">Schau dir die kurze Tour an oder registriere dich direkt. Du hast die Wahl.</p>
+    <ul class="tp-steps">
+      <li><b>1</b><span data-tp="s1">Registrieren</span></li>
+      <li><b>2</b><span data-tp="s2">Abo wählen (Stripe / Paystack)</span></li>
+      <li><b>3</b><span data-tp="s3">Auszahlung einrichten</span></li>
+      <li><b>4</b><span data-tp="s4">Produkte hochladen</span></li>
+    </ul>
+    <button type="button" class="tour-cta-btn" id="open-tour-btn">
+      <span style="font-size:17px">&#9654;</span> <span data-tp="watch">Kurze Tour ansehen</span>
+    </button>
+    <p class="tour-cta-note" data-tp="skip">Kein Muss – du kannst dich auch direkt registrieren.</p>
+  </aside>
+  </div>
+</div>
+
+<!-- ============================================================
+     DASHBOARD
+     ============================================================ -->
+<div id="dashboard-screen" class="hidden">
+  <header>
+    <div class="brand">AFRICARPARTS</div>
+    <div class="user-info">
+      <span class="user-email" id="header-email"></span>
+      <span class="user-role" id="header-role"></span>
+      <div class="lang-switcher">
+        <select class="lang-select" aria-label="Language">
+          <option value="de">🇩🇪 DE</option>
+          <option value="en">🇬🇧 EN</option>
+          <option value="fr">🇫🇷 FR</option>
+          <option value="pt">🇵🇹 PT</option>
+          <option value="es">🇪🇸 ES</option>
+        </select>
+      </div>
+      <button class="btn btn-secondary btn-sm" id="logout-btn" data-i18n="dash.logout">Logout</button>
+    </div>
+  </header>
+  
+  <main>
+    <div class="section-header">
+      <h2 data-i18n="dash.my_products">Meine Produkte</h2>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-secondary" id="csv-import-btn" data-i18n="dash.csv_import">📥 CSV-Import</button>
+        <button class="btn btn-primary" id="new-product-btn" data-i18n="dash.new_product">+ Neues Produkt</button>
+      </div>
+    </div>
+    
+    <div class="products-card">
+      <div id="products-content">
+        <div class="loading" data-i18n="dash.loading_products">Lade Produkte…</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ============================================================
+     CSV IMPORT MODAL
+     ============================================================ -->
+<div id="csv-modal" class="modal-backdrop hidden">
+  <div class="modal" style="max-width: 560px;">
+    <div class="modal-header">
+      <h3 data-i18n="csv.title">CSV-Import</h3>
+      <button class="modal-close" id="csv-modal-close-btn">×</button>
+    </div>
+    
+    <div class="modal-body">
+      <div id="csv-error" class="alert alert-error hidden"></div>
+      <div id="csv-success" class="alert alert-success hidden"></div>
+      
+      <p style="margin-bottom: 12px; font-size: 14px; color: var(--text-muted);" data-i18n="csv.upload_hint">
+        Lade eine CSV-Datei hoch, um mehrere Produkte gleichzeitig anzulegen.
+      </p>
+      
+      <details style="margin-bottom: 16px; font-size: 13px;">
+        <summary style="cursor:pointer; color: var(--primary); font-weight: 500;" data-i18n="csv.show_format">
+          ℹ️ CSV-Format anzeigen
+        </summary>
+        <div style="background: var(--bg); padding: 12px; border-radius: 6px; margin-top: 8px; font-family: monospace; font-size: 12px; overflow-x: auto;">
+          <strong data-i18n="csv.required">Pflicht:</strong> title, price_usd<br>
+          <strong data-i18n="csv.optional">Optional:</strong> description, brand, model, oem, condition, stock, category_slug, tags, lang<br><br>
+          <strong data-i18n="csv.example_header">Beispiel (1. Zeile = Header):</strong><br>
+          <code style="display:block; white-space:pre; margin-top: 4px;">title,price_usd,brand,model,oem,stock,condition,tags
+Bremsbelag VW Golf 7,49.99,Bosch,Golf 7,8V0698151D,10,new,"bremsbelag,vorne"
+Stoßdämpfer BMW E46,89.50,Sachs,E46,33526764749,5,new,</code>
+          <br>
+          <strong data-i18n="csv.notes_label">Hinweise:</strong>
+          <ul style="margin: 4px 0 0 20px;" id="csv-notes-list">
+            <!-- Notes rendered dynamically via i18n -->
+          </ul>
+        </div>
+      </details>
+      
+      <div class="form-group">
+        <label for="csv-file" data-i18n="csv.choose_file">CSV-Datei auswählen</label>
+        <input type="file" id="csv-file" accept=".csv,.txt,text/csv">
+      </div>
+    </div>
+    
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" id="csv-cancel-btn" data-i18n="common.cancel">Abbrechen</button>
+      <button type="button" class="btn btn-primary" id="csv-upload-btn" data-i18n="csv.upload_import">Hochladen & importieren</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     PRODUCT MODAL
+     ============================================================ -->
+<div id="product-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-title" data-i18n="product.new_title">Neues Produkt</h3>
+      <button class="modal-close" id="modal-close-btn">×</button>
+    </div>
+    
+    <form id="product-form">
+      <div class="modal-body">
+        <div id="product-error" class="alert alert-error hidden"></div>
+        
+        <!-- Default Language -->
+        <div class="form-group">
+          <label for="default-lang" data-i18n="product.default_lang">Standard-Sprache *</label>
+          <select id="default-lang" name="default_lang" required>
+            <option value="de">Deutsch</option>
+            <option value="en">English</option>
+            <option value="fr">Français</option>
+            <option value="pt">Português</option>
+            <option value="ar">العربية</option>
+          </select>
+          <div class="hint" data-i18n="product.default_lang_hint">In dieser Sprache muss mindestens der Titel ausgefüllt sein.</div>
+        </div>
+        
+        <!-- Title in default language -->
+        <div class="form-group">
+          <label for="default-title"><span data-i18n="product.title_label">Titel</span> <span id="title-lang-hint">(de)</span> *</label>
+          <input type="text" id="default-title" required maxlength="200">
+        </div>
+        
+        <!-- Description in default language -->
+        <div class="form-group">
+          <label for="default-description"><span data-i18n="product.description_label">Beschreibung</span> <span id="desc-lang-hint">(de)</span></label>
+          <textarea id="default-description" rows="4"></textarea>
+        </div>
+        
+        <!-- Other languages (collapsible) -->
+        <div class="accordion closed" id="other-langs-accordion">
+          <div class="accordion-header" id="other-langs-header">
+            <span data-i18n="product.other_langs">+ Andere Sprachen (optional)</span>
+            <span class="accordion-arrow">▼</span>
+          </div>
+          <div class="accordion-content" id="other-langs-content">
+            <!-- Other language fields rendered dynamically -->
+          </div>
+        </div>
+        
+        <!-- Price + Stock -->
+        <div class="form-row" style="margin-top: 16px;">
+          <div class="form-group">
+            <label for="price" data-i18n="product.price">Preis (USD) *</label>
+            <input type="number" id="price" required min="0" step="0.01">
+          </div>
+          <div class="form-group">
+            <label for="stock" data-i18n="product.stock">Lagerbestand</label>
+            <input type="number" id="stock" min="0" value="0">
+          </div>
+        </div>
+        
+        <!-- Brand + Model -->
+        <div class="form-row">
+          <div class="form-group">
+            <label for="brand" data-i18n="product.brand">Marke</label>
+            <input type="text" id="brand" maxlength="100" data-i18n-placeholder="product.brand_placeholder" placeholder="z.B. Bosch">
+          </div>
+          <div class="form-group">
+            <label for="model" data-i18n="product.model">Modell</label>
+            <input type="text" id="model" maxlength="100" data-i18n-placeholder="product.model_placeholder" placeholder="z.B. F10">
+          </div>
+        </div>
+        
+        <!-- OEM + Condition -->
+        <div class="form-row">
+          <div class="form-group">
+            <label for="oem" data-i18n="product.oem">OEM-Nummer</label>
+            <input type="text" id="oem" maxlength="100" data-i18n-placeholder="product.oem_placeholder" placeholder="z.B. 34116794917">
+          </div>
+          <div class="form-group">
+            <label for="condition" data-i18n="product.condition">Zustand</label>
+            <select id="condition">
+              <option value="new" data-i18n="product.cond_new">Neu</option>
+              <option value="used" data-i18n="product.cond_used">Gebraucht</option>
+              <option value="refurbished" data-i18n="product.cond_refurbished">Generalüberholt</option>
+            </select>
+          </div>
+        </div>
+        
+        <!-- Category -->
+        <div class="form-group">
+          <label for="category" data-i18n="product.category">Kategorie</label>
+          <select id="category">
+            <option value="" data-i18n="product.no_category">— Keine Kategorie —</option>
+          </select>
+        </div>
+        
+        <!-- Tags -->
+        <div class="form-group">
+          <label for="tags" data-i18n="product.tags">Tags</label>
+          <input type="text" id="tags" data-i18n-placeholder="product.tags_placeholder" placeholder="z.B. bremsbelag, vorne, keramik">
+          <div class="hint" data-i18n="product.tags_hint">Komma-getrennt. Max. 50 Zeichen pro Tag.</div>
+        </div>
+        
+        <!-- Images -->
+        <div class="form-group">
+          <label data-i18n="product.images_label">Bilder (max. 5, JPG/PNG, max. 2 MB pro Bild)</label>
+          <div class="image-grid" id="image-grid"></div>
+          <input type="file" id="image-input" accept="image/jpeg,image/png" multiple style="display:none">
+        </div>
+        
+        <!-- Active -->
+        <div class="form-group">
+          <label style="display:flex; align-items:center; gap:8px; font-weight: normal;">
+            <input type="checkbox" id="active" checked style="width:auto">
+            <span data-i18n="product.active_label">Produkt ist aktiv (sichtbar im Marktplatz)</span>
+          </label>
+        </div>
+      </div>
+      
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="cancel-btn" data-i18n="common.cancel">Abbrechen</button>
+        <button type="submit" class="btn btn-primary" id="save-btn" data-i18n="common.save">Speichern</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ============================================================
+// I18N
+// ============================================================
+
+const I18N = {
+  de: {
+    page_title: "Händler-Dashboard | AFRICARPARTS",
+    "auth.title": "Händler-Bereich",
+    "auth.subtitle": "Melde dich an oder registriere dich als Händler.",
+    "auth.tab_login": "Anmelden",
+    "auth.tab_register": "Registrieren",
+    "auth.email": "E-Mail",
+    "auth.password": "Passwort",
+    "auth.sign_in": "Einloggen",
+    "auth.signing_in": "Einloggen…",
+    "auth.name_company": "Name oder Firma *",
+    "auth.email_required": "E-Mail *",
+    "auth.password_required": "Passwort *",
+    "auth.password_hint": "Mindestens 8 Zeichen.",
+    "auth.phone": "WhatsApp / Telefon",
+    "auth.country": "Land",
+    "auth.country_placeholder": "z.B. Ghana",
+    "auth.register_as_dealer": "Als Händler registrieren",
+    "auth.registering": "Registriere…",
+    "auth.register_note": "Mit der Registrierung wirst du als Händler freigeschaltet und kannst sofort Produkte einstellen.",
+    "auth.session_expired": "Sitzung abgelaufen — bitte erneut einloggen.",
+    "auth.email_exists": "Diese E-Mail ist bereits registriert. Bitte einloggen.",
+    "auth.password_too_short": "Passwort muss mindestens 8 Zeichen lang sein.",
+    "auth.email_password_required": "E-Mail und Passwort sind Pflicht.",
+    "dash.logout": "Logout",
+    "dash.my_products": "Meine Produkte",
+    "dash.csv_import": "📥 CSV-Import",
+    "dash.new_product": "+ Neues Produkt",
+    "dash.loading_products": "Lade Produkte…",
+    "dash.no_products": "Du hast noch keine Produkte angelegt.",
+    "dash.no_products_hint": 'Klick oben auf "+ Neues Produkt" um zu starten.',
+    "dash.th_image": "Bild",
+    "dash.th_title": "Titel",
+    "dash.th_brand_model": "Marke / Modell",
+    "dash.th_oem": "OEM",
+    "dash.th_price": "Preis",
+    "dash.th_stock": "Lagerbestand",
+    "dash.th_status": "Status",
+    "dash.th_actions": "Aktionen",
+    "dash.no_title": "(kein Titel)",
+    "dash.badge_active": "Aktiv",
+    "dash.badge_inactive": "Inaktiv",
+    "dash.btn_edit": "Bearbeiten",
+    "dash.btn_delete": "Löschen",
+    "dash.delete_confirm": "Produkt wirklich löschen? Das kann nicht rückgängig gemacht werden.",
+    "dash.load_error": "Fehler beim Laden: ",
+    "dash.error_prefix": "Fehler: ",
+    "csv.title": "CSV-Import",
+    "csv.upload_hint": "Lade eine CSV-Datei hoch, um mehrere Produkte gleichzeitig anzulegen.",
+    "csv.show_format": "ℹ️ CSV-Format anzeigen",
+    "csv.required": "Pflicht:",
+    "csv.optional": "Optional:",
+    "csv.example_header": "Beispiel (1. Zeile = Header):",
+    "csv.notes_label": "Hinweise:",
+    "csv.note_condition": "<code>condition</code>: <code>new</code>, <code>used</code> oder <code>refurbished</code>",
+    "csv.note_lang": "<code>lang</code>: <code>de</code>, <code>en</code>, <code>fr</code>, <code>pt</code>, <code>ar</code> (default: de)",
+    "csv.note_tags": "<code>tags</code>: kommagetrennt, in Anführungszeichen wenn Komma im Wert",
+    "csv.note_separator": "Trennzeichen: Komma, Semikolon oder Tab — automatisch erkannt",
+    "csv.note_images": "<strong>Bilder gehen NICHT per CSV</strong> — die fügst du nach dem Import einzeln pro Produkt hinzu",
+    "csv.choose_file": "CSV-Datei auswählen",
+    "csv.please_choose": "Bitte eine CSV-Datei auswählen",
+    "csv.too_large": "Datei ist größer als 5 MB",
+    "csv.importing": "Importiere…",
+    "csv.upload_import": "Hochladen & importieren",
+    "csv.imported": "{n} Produkt(e) importiert",
+    "csv.skipped": "{n} übersprungen",
+    "csv.errors_label": "Fehler:",
+    "common.cancel": "Abbrechen",
+    "common.save": "Speichern",
+    "common.saving": "Speichern…",
+    "product.new_title": "Neues Produkt",
+    "product.edit_title": "Produkt bearbeiten",
+    "product.default_lang": "Standard-Sprache *",
+    "product.default_lang_hint": "In dieser Sprache muss mindestens der Titel ausgefüllt sein.",
+    "product.title_label": "Titel",
+    "product.description_label": "Beschreibung",
+    "product.other_langs": "+ Andere Sprachen (optional)",
+    "product.price": "Preis (USD) *",
+    "product.stock": "Lagerbestand",
+    "product.brand": "Marke",
+    "product.brand_placeholder": "z.B. Bosch",
+    "product.model": "Modell",
+    "product.model_placeholder": "z.B. F10",
+    "product.oem": "OEM-Nummer",
+    "product.oem_placeholder": "z.B. 34116794917",
+    "product.condition": "Zustand",
+    "product.cond_new": "Neu",
+    "product.cond_used": "Gebraucht",
+    "product.cond_refurbished": "Generalüberholt",
+    "product.category": "Kategorie",
+    "product.no_category": "— Keine Kategorie —",
+    "product.tags": "Tags",
+    "product.tags_placeholder": "z.B. bremsbelag, vorne, keramik",
+    "product.tags_hint": "Komma-getrennt. Max. 50 Zeichen pro Tag.",
+    "product.images_label": "Bilder (max. 5, JPG/PNG, max. 2 MB pro Bild)",
+    "product.add_image": "Bild hochladen",
+    "product.max_more": "Maximal {n} weitere Bild(er) möglich (Limit: 5).",
+    "product.not_jpg_png": '"{name}" ist kein JPG/PNG.',
+    "product.too_large_img": '"{name}" ist größer als 2 MB.',
+    "product.upload_error": "Upload-Fehler: ",
+    "product.active_label": "Produkt ist aktiv (sichtbar im Marktplatz)",
+  },
+  en: {
+    page_title: "Seller Dashboard | AFRICARPARTS",
+    "auth.title": "Seller Area",
+    "auth.subtitle": "Sign in or register as a seller.",
+    "auth.tab_login": "Sign In",
+    "auth.tab_register": "Register",
+    "auth.email": "Email",
+    "auth.password": "Password",
+    "auth.sign_in": "Sign In",
+    "auth.signing_in": "Signing in…",
+    "auth.name_company": "Name or company *",
+    "auth.email_required": "Email *",
+    "auth.password_required": "Password *",
+    "auth.password_hint": "At least 8 characters.",
+    "auth.phone": "WhatsApp / Phone",
+    "auth.country": "Country",
+    "auth.country_placeholder": "e.g. Ghana",
+    "auth.register_as_dealer": "Register as Seller",
+    "auth.registering": "Registering…",
+    "auth.register_note": "By registering you will be activated as a seller and can list products immediately.",
+    "auth.session_expired": "Session expired — please sign in again.",
+    "auth.email_exists": "This email is already registered. Please sign in.",
+    "auth.password_too_short": "Password must be at least 8 characters long.",
+    "auth.email_password_required": "Email and password are required.",
+    "dash.logout": "Logout",
+    "dash.my_products": "My Products",
+    "dash.csv_import": "📥 CSV Import",
+    "dash.new_product": "+ New Product",
+    "dash.loading_products": "Loading products…",
+    "dash.no_products": "You haven't added any products yet.",
+    "dash.no_products_hint": 'Click "+ New Product" above to get started.',
+    "dash.th_image": "Image",
+    "dash.th_title": "Title",
+    "dash.th_brand_model": "Brand / Model",
+    "dash.th_oem": "OEM",
+    "dash.th_price": "Price",
+    "dash.th_stock": "Stock",
+    "dash.th_status": "Status",
+    "dash.th_actions": "Actions",
+    "dash.no_title": "(no title)",
+    "dash.badge_active": "Active",
+    "dash.badge_inactive": "Inactive",
+    "dash.btn_edit": "Edit",
+    "dash.btn_delete": "Delete",
+    "dash.delete_confirm": "Really delete this product? This cannot be undone.",
+    "dash.load_error": "Loading error: ",
+    "dash.error_prefix": "Error: ",
+    "csv.title": "CSV Import",
+    "csv.upload_hint": "Upload a CSV file to add multiple products at once.",
+    "csv.show_format": "ℹ️ Show CSV format",
+    "csv.required": "Required:",
+    "csv.optional": "Optional:",
+    "csv.example_header": "Example (line 1 = header):",
+    "csv.notes_label": "Notes:",
+    "csv.note_condition": "<code>condition</code>: <code>new</code>, <code>used</code> or <code>refurbished</code>",
+    "csv.note_lang": "<code>lang</code>: <code>de</code>, <code>en</code>, <code>fr</code>, <code>pt</code>, <code>ar</code> (default: de)",
+    "csv.note_tags": "<code>tags</code>: comma-separated, use quotes if a value contains commas",
+    "csv.note_separator": "Separator: comma, semicolon or tab — auto-detected",
+    "csv.note_images": "<strong>Images cannot be imported via CSV</strong> — add them per product after import",
+    "csv.choose_file": "Choose CSV file",
+    "csv.please_choose": "Please select a CSV file",
+    "csv.too_large": "File is larger than 5 MB",
+    "csv.importing": "Importing…",
+    "csv.upload_import": "Upload & import",
+    "csv.imported": "{n} product(s) imported",
+    "csv.skipped": "{n} skipped",
+    "csv.errors_label": "Errors:",
+    "common.cancel": "Cancel",
+    "common.save": "Save",
+    "common.saving": "Saving…",
+    "product.new_title": "New Product",
+    "product.edit_title": "Edit Product",
+    "product.default_lang": "Default Language *",
+    "product.default_lang_hint": "At minimum the title must be filled in for this language.",
+    "product.title_label": "Title",
+    "product.description_label": "Description",
+    "product.other_langs": "+ Other languages (optional)",
+    "product.price": "Price (USD) *",
+    "product.stock": "Stock",
+    "product.brand": "Brand",
+    "product.brand_placeholder": "e.g. Bosch",
+    "product.model": "Model",
+    "product.model_placeholder": "e.g. F10",
+    "product.oem": "OEM Number",
+    "product.oem_placeholder": "e.g. 34116794917",
+    "product.condition": "Condition",
+    "product.cond_new": "New",
+    "product.cond_used": "Used",
+    "product.cond_refurbished": "Refurbished",
+    "product.category": "Category",
+    "product.no_category": "— No category —",
+    "product.tags": "Tags",
+    "product.tags_placeholder": "e.g. brake pads, front, ceramic",
+    "product.tags_hint": "Comma-separated. Max. 50 characters per tag.",
+    "product.images_label": "Images (max. 5, JPG/PNG, max. 2 MB per image)",
+    "product.add_image": "Upload image",
+    "product.max_more": "Max {n} more image(s) possible (limit: 5).",
+    "product.not_jpg_png": '"{name}" is not JPG/PNG.',
+    "product.too_large_img": '"{name}" is larger than 2 MB.',
+    "product.upload_error": "Upload error: ",
+    "product.active_label": "Product is active (visible in marketplace)",
+  },
+  fr: {
+    page_title: "Tableau de bord vendeur | AFRICARPARTS",
+    "auth.title": "Espace vendeur",
+    "auth.subtitle": "Connectez-vous ou inscrivez-vous en tant que vendeur.",
+    "auth.tab_login": "Connexion",
+    "auth.tab_register": "Inscription",
+    "auth.email": "E-mail",
+    "auth.password": "Mot de passe",
+    "auth.sign_in": "Se connecter",
+    "auth.signing_in": "Connexion…",
+    "auth.name_company": "Nom ou entreprise *",
+    "auth.email_required": "E-mail *",
+    "auth.password_required": "Mot de passe *",
+    "auth.password_hint": "Au moins 8 caractères.",
+    "auth.phone": "WhatsApp / Téléphone",
+    "auth.country": "Pays",
+    "auth.country_placeholder": "ex. Ghana",
+    "auth.register_as_dealer": "S'inscrire comme vendeur",
+    "auth.registering": "Inscription…",
+    "auth.register_note": "En vous inscrivant, vous serez activé comme vendeur et pourrez ajouter des produits immédiatement.",
+    "auth.session_expired": "Session expirée — veuillez vous reconnecter.",
+    "auth.email_exists": "Cet e-mail est déjà enregistré. Veuillez vous connecter.",
+    "auth.password_too_short": "Le mot de passe doit contenir au moins 8 caractères.",
+    "auth.email_password_required": "E-mail et mot de passe obligatoires.",
+    "dash.logout": "Déconnexion",
+    "dash.my_products": "Mes produits",
+    "dash.csv_import": "📥 Import CSV",
+    "dash.new_product": "+ Nouveau produit",
+    "dash.loading_products": "Chargement des produits…",
+    "dash.no_products": "Vous n'avez encore aucun produit.",
+    "dash.no_products_hint": 'Cliquez sur "+ Nouveau produit" ci-dessus pour commencer.',
+    "dash.th_image": "Image",
+    "dash.th_title": "Titre",
+    "dash.th_brand_model": "Marque / Modèle",
+    "dash.th_oem": "OEM",
+    "dash.th_price": "Prix",
+    "dash.th_stock": "Stock",
+    "dash.th_status": "Statut",
+    "dash.th_actions": "Actions",
+    "dash.no_title": "(sans titre)",
+    "dash.badge_active": "Actif",
+    "dash.badge_inactive": "Inactif",
+    "dash.btn_edit": "Modifier",
+    "dash.btn_delete": "Supprimer",
+    "dash.delete_confirm": "Vraiment supprimer ce produit ? Cette action est irréversible.",
+    "dash.load_error": "Erreur de chargement : ",
+    "dash.error_prefix": "Erreur : ",
+    "csv.title": "Import CSV",
+    "csv.upload_hint": "Téléchargez un fichier CSV pour ajouter plusieurs produits à la fois.",
+    "csv.show_format": "ℹ️ Afficher le format CSV",
+    "csv.required": "Obligatoire :",
+    "csv.optional": "Optionnel :",
+    "csv.example_header": "Exemple (ligne 1 = en-tête) :",
+    "csv.notes_label": "Notes :",
+    "csv.note_condition": "<code>condition</code> : <code>new</code>, <code>used</code> ou <code>refurbished</code>",
+    "csv.note_lang": "<code>lang</code> : <code>de</code>, <code>en</code>, <code>fr</code>, <code>pt</code>, <code>ar</code> (défaut : de)",
+    "csv.note_tags": "<code>tags</code> : séparés par virgule, entre guillemets si la valeur contient une virgule",
+    "csv.note_separator": "Séparateur : virgule, point-virgule ou tabulation — détection automatique",
+    "csv.note_images": "<strong>Les images ne peuvent pas être importées via CSV</strong> — ajoutez-les par produit après l'import",
+    "csv.choose_file": "Choisir un fichier CSV",
+    "csv.please_choose": "Veuillez sélectionner un fichier CSV",
+    "csv.too_large": "Le fichier dépasse 5 Mo",
+    "csv.importing": "Importation…",
+    "csv.upload_import": "Télécharger et importer",
+    "csv.imported": "{n} produit(s) importé(s)",
+    "csv.skipped": "{n} ignoré(s)",
+    "csv.errors_label": "Erreurs :",
+    "common.cancel": "Annuler",
+    "common.save": "Enregistrer",
+    "common.saving": "Enregistrement…",
+    "product.new_title": "Nouveau produit",
+    "product.edit_title": "Modifier le produit",
+    "product.default_lang": "Langue par défaut *",
+    "product.default_lang_hint": "Le titre doit au moins être renseigné dans cette langue.",
+    "product.title_label": "Titre",
+    "product.description_label": "Description",
+    "product.other_langs": "+ Autres langues (optionnel)",
+    "product.price": "Prix (USD) *",
+    "product.stock": "Stock",
+    "product.brand": "Marque",
+    "product.brand_placeholder": "ex. Bosch",
+    "product.model": "Modèle",
+    "product.model_placeholder": "ex. F10",
+    "product.oem": "Numéro OEM",
+    "product.oem_placeholder": "ex. 34116794917",
+    "product.condition": "État",
+    "product.cond_new": "Neuf",
+    "product.cond_used": "Occasion",
+    "product.cond_refurbished": "Reconditionné",
+    "product.category": "Catégorie",
+    "product.no_category": "— Aucune catégorie —",
+    "product.tags": "Étiquettes",
+    "product.tags_placeholder": "ex. plaquettes, avant, céramique",
+    "product.tags_hint": "Séparées par virgule. Max. 50 caractères par étiquette.",
+    "product.images_label": "Images (max. 5, JPG/PNG, max. 2 Mo par image)",
+    "product.add_image": "Télécharger une image",
+    "product.max_more": "Max {n} image(s) supplémentaire(s) possible(s) (limite : 5).",
+    "product.not_jpg_png": '« {name} » n\'est pas un JPG/PNG.',
+    "product.too_large_img": '« {name} » dépasse 2 Mo.',
+    "product.upload_error": "Erreur de téléchargement : ",
+    "product.active_label": "Produit actif (visible sur le marketplace)",
+  },
+  pt: {
+    page_title: "Painel do vendedor | AFRICARPARTS",
+    "auth.title": "Área do vendedor",
+    "auth.subtitle": "Inicie sessão ou registe-se como vendedor.",
+    "auth.tab_login": "Entrar",
+    "auth.tab_register": "Registar",
+    "auth.email": "E-mail",
+    "auth.password": "Palavra-passe",
+    "auth.sign_in": "Entrar",
+    "auth.signing_in": "A entrar…",
+    "auth.name_company": "Nome ou empresa *",
+    "auth.email_required": "E-mail *",
+    "auth.password_required": "Palavra-passe *",
+    "auth.password_hint": "Pelo menos 8 caracteres.",
+    "auth.phone": "WhatsApp / Telefone",
+    "auth.country": "País",
+    "auth.country_placeholder": "ex. Ghana",
+    "auth.register_as_dealer": "Registar como vendedor",
+    "auth.registering": "A registar…",
+    "auth.register_note": "Ao registar-se, será activado como vendedor e pode adicionar produtos imediatamente.",
+    "auth.session_expired": "Sessão expirada — faça login novamente.",
+    "auth.email_exists": "Este e-mail já está registado. Por favor, inicie sessão.",
+    "auth.password_too_short": "A palavra-passe deve ter pelo menos 8 caracteres.",
+    "auth.email_password_required": "E-mail e palavra-passe são obrigatórios.",
+    "dash.logout": "Sair",
+    "dash.my_products": "Os meus produtos",
+    "dash.csv_import": "📥 Importar CSV",
+    "dash.new_product": "+ Novo produto",
+    "dash.loading_products": "A carregar produtos…",
+    "dash.no_products": "Ainda não adicionou nenhum produto.",
+    "dash.no_products_hint": 'Clique em "+ Novo produto" acima para começar.',
+    "dash.th_image": "Imagem",
+    "dash.th_title": "Título",
+    "dash.th_brand_model": "Marca / Modelo",
+    "dash.th_oem": "OEM",
+    "dash.th_price": "Preço",
+    "dash.th_stock": "Stock",
+    "dash.th_status": "Estado",
+    "dash.th_actions": "Acções",
+    "dash.no_title": "(sem título)",
+    "dash.badge_active": "Activo",
+    "dash.badge_inactive": "Inactivo",
+    "dash.btn_edit": "Editar",
+    "dash.btn_delete": "Eliminar",
+    "dash.delete_confirm": "Eliminar mesmo este produto? Esta acção não pode ser desfeita.",
+    "dash.load_error": "Erro ao carregar: ",
+    "dash.error_prefix": "Erro: ",
+    "csv.title": "Importar CSV",
+    "csv.upload_hint": "Carregue um ficheiro CSV para adicionar vários produtos de uma vez.",
+    "csv.show_format": "ℹ️ Mostrar formato CSV",
+    "csv.required": "Obrigatório:",
+    "csv.optional": "Opcional:",
+    "csv.example_header": "Exemplo (linha 1 = cabeçalho):",
+    "csv.notes_label": "Notas:",
+    "csv.note_condition": "<code>condition</code>: <code>new</code>, <code>used</code> ou <code>refurbished</code>",
+    "csv.note_lang": "<code>lang</code>: <code>de</code>, <code>en</code>, <code>fr</code>, <code>pt</code>, <code>ar</code> (predefinição: de)",
+    "csv.note_tags": "<code>tags</code>: separadas por vírgula, entre aspas se o valor contiver vírgula",
+    "csv.note_separator": "Separador: vírgula, ponto e vírgula ou tabulação — detecção automática",
+    "csv.note_images": "<strong>As imagens não podem ser importadas via CSV</strong> — adicione-as por produto após a importação",
+    "csv.choose_file": "Escolher ficheiro CSV",
+    "csv.please_choose": "Por favor, seleccione um ficheiro CSV",
+    "csv.too_large": "O ficheiro excede 5 MB",
+    "csv.importing": "A importar…",
+    "csv.upload_import": "Carregar e importar",
+    "csv.imported": "{n} produto(s) importado(s)",
+    "csv.skipped": "{n} ignorado(s)",
+    "csv.errors_label": "Erros:",
+    "common.cancel": "Cancelar",
+    "common.save": "Guardar",
+    "common.saving": "A guardar…",
+    "product.new_title": "Novo produto",
+    "product.edit_title": "Editar produto",
+    "product.default_lang": "Idioma predefinido *",
+    "product.default_lang_hint": "Pelo menos o título deve estar preenchido neste idioma.",
+    "product.title_label": "Título",
+    "product.description_label": "Descrição",
+    "product.other_langs": "+ Outros idiomas (opcional)",
+    "product.price": "Preço (USD) *",
+    "product.stock": "Stock",
+    "product.brand": "Marca",
+    "product.brand_placeholder": "ex. Bosch",
+    "product.model": "Modelo",
+    "product.model_placeholder": "ex. F10",
+    "product.oem": "Número OEM",
+    "product.oem_placeholder": "ex. 34116794917",
+    "product.condition": "Estado",
+    "product.cond_new": "Novo",
+    "product.cond_used": "Usado",
+    "product.cond_refurbished": "Recondicionado",
+    "product.category": "Categoria",
+    "product.no_category": "— Sem categoria —",
+    "product.tags": "Etiquetas",
+    "product.tags_placeholder": "ex. pastilhas, frente, cerâmica",
+    "product.tags_hint": "Separadas por vírgula. Máx. 50 caracteres por etiqueta.",
+    "product.images_label": "Imagens (máx. 5, JPG/PNG, máx. 2 MB por imagem)",
+    "product.add_image": "Carregar imagem",
+    "product.max_more": "Máximo de mais {n} imagem(ns) possível (limite: 5).",
+    "product.not_jpg_png": '"{name}" não é JPG/PNG.',
+    "product.too_large_img": '"{name}" excede 2 MB.',
+    "product.upload_error": "Erro de carregamento: ",
+    "product.active_label": "Produto activo (visível no marketplace)",
+  },
+  es: {
+    page_title: "Panel del vendedor | AFRICARPARTS",
+    "auth.title": "Área del vendedor",
+    "auth.subtitle": "Inicia sesión o regístrate como vendedor.",
+    "auth.tab_login": "Iniciar sesión",
+    "auth.tab_register": "Registrarse",
+    "auth.email": "Correo electrónico",
+    "auth.password": "Contraseña",
+    "auth.sign_in": "Iniciar sesión",
+    "auth.signing_in": "Iniciando sesión…",
+    "auth.name_company": "Nombre o empresa *",
+    "auth.email_required": "Correo electrónico *",
+    "auth.password_required": "Contraseña *",
+    "auth.password_hint": "Mínimo 8 caracteres.",
+    "auth.phone": "WhatsApp / Teléfono",
+    "auth.country": "País",
+    "auth.country_placeholder": "ej. Ghana",
+    "auth.register_as_dealer": "Registrarse como vendedor",
+    "auth.registering": "Registrando…",
+    "auth.register_note": "Al registrarte serás activado como vendedor y podrás añadir productos inmediatamente.",
+    "auth.session_expired": "Sesión expirada — por favor, inicia sesión de nuevo.",
+    "auth.email_exists": "Este correo ya está registrado. Por favor, inicia sesión.",
+    "auth.password_too_short": "La contraseña debe tener al menos 8 caracteres.",
+    "auth.email_password_required": "Correo y contraseña son obligatorios.",
+    "dash.logout": "Cerrar sesión",
+    "dash.my_products": "Mis productos",
+    "dash.csv_import": "📥 Importar CSV",
+    "dash.new_product": "+ Nuevo producto",
+    "dash.loading_products": "Cargando productos…",
+    "dash.no_products": "Aún no has añadido ningún producto.",
+    "dash.no_products_hint": 'Haz clic en "+ Nuevo producto" arriba para empezar.',
+    "dash.th_image": "Imagen",
+    "dash.th_title": "Título",
+    "dash.th_brand_model": "Marca / Modelo",
+    "dash.th_oem": "OEM",
+    "dash.th_price": "Precio",
+    "dash.th_stock": "Stock",
+    "dash.th_status": "Estado",
+    "dash.th_actions": "Acciones",
+    "dash.no_title": "(sin título)",
+    "dash.badge_active": "Activo",
+    "dash.badge_inactive": "Inactivo",
+    "dash.btn_edit": "Editar",
+    "dash.btn_delete": "Eliminar",
+    "dash.delete_confirm": "¿Eliminar realmente este producto? Esta acción no se puede deshacer.",
+    "dash.load_error": "Error al cargar: ",
+    "dash.error_prefix": "Error: ",
+    "csv.title": "Importar CSV",
+    "csv.upload_hint": "Sube un archivo CSV para añadir varios productos a la vez.",
+    "csv.show_format": "ℹ️ Mostrar formato CSV",
+    "csv.required": "Obligatorio:",
+    "csv.optional": "Opcional:",
+    "csv.example_header": "Ejemplo (línea 1 = encabezado):",
+    "csv.notes_label": "Notas:",
+    "csv.note_condition": "<code>condition</code>: <code>new</code>, <code>used</code> o <code>refurbished</code>",
+    "csv.note_lang": "<code>lang</code>: <code>de</code>, <code>en</code>, <code>fr</code>, <code>pt</code>, <code>ar</code> (por defecto: de)",
+    "csv.note_tags": "<code>tags</code>: separadas por coma, entre comillas si el valor contiene coma",
+    "csv.note_separator": "Separador: coma, punto y coma o tabulación — detección automática",
+    "csv.note_images": "<strong>Las imágenes no se pueden importar por CSV</strong> — añádelas por producto después de la importación",
+    "csv.choose_file": "Elegir archivo CSV",
+    "csv.please_choose": "Por favor, selecciona un archivo CSV",
+    "csv.too_large": "El archivo supera los 5 MB",
+    "csv.importing": "Importando…",
+    "csv.upload_import": "Subir e importar",
+    "csv.imported": "{n} producto(s) importado(s)",
+    "csv.skipped": "{n} omitido(s)",
+    "csv.errors_label": "Errores:",
+    "common.cancel": "Cancelar",
+    "common.save": "Guardar",
+    "common.saving": "Guardando…",
+    "product.new_title": "Nuevo producto",
+    "product.edit_title": "Editar producto",
+    "product.default_lang": "Idioma predeterminado *",
+    "product.default_lang_hint": "Como mínimo el título debe rellenarse en este idioma.",
+    "product.title_label": "Título",
+    "product.description_label": "Descripción",
+    "product.other_langs": "+ Otros idiomas (opcional)",
+    "product.price": "Precio (USD) *",
+    "product.stock": "Stock",
+    "product.brand": "Marca",
+    "product.brand_placeholder": "ej. Bosch",
+    "product.model": "Modelo",
+    "product.model_placeholder": "ej. F10",
+    "product.oem": "Número OEM",
+    "product.oem_placeholder": "ej. 34116794917",
+    "product.condition": "Estado",
+    "product.cond_new": "Nuevo",
+    "product.cond_used": "Usado",
+    "product.cond_refurbished": "Reacondicionado",
+    "product.category": "Categoría",
+    "product.no_category": "— Sin categoría —",
+    "product.tags": "Etiquetas",
+    "product.tags_placeholder": "ej. pastillas, delantera, cerámica",
+    "product.tags_hint": "Separadas por coma. Máx. 50 caracteres por etiqueta.",
+    "product.images_label": "Imágenes (máx. 5, JPG/PNG, máx. 2 MB por imagen)",
+    "product.add_image": "Subir imagen",
+    "product.max_more": "Máximo {n} imagen(es) más posibles (límite: 5).",
+    "product.not_jpg_png": '"{name}" no es JPG/PNG.',
+    "product.too_large_img": '"{name}" supera 2 MB.',
+    "product.upload_error": "Error al subir: ",
+    "product.active_label": "Producto activo (visible en el marketplace)",
+  },
+};
+
+let currentLang = (function () {
+  const saved = localStorage.getItem('apa_lang');
+  if (saved && I18N[saved]) return saved;
+  const browser = (navigator.language || 'en').slice(0, 2).toLowerCase();
+  return I18N[browser] ? browser : 'de';
+})();
+
+function t(key, vars) {
+  const pack = I18N[currentLang] || I18N.de;
+  let str = pack[key] != null ? pack[key] : (I18N.de[key] != null ? I18N.de[key] : key);
+  if (vars) {
+    for (const k in vars) {
+      str = str.replace(new RegExp('\\{' + k + '\\}', 'g'), vars[k]);
+    }
+  }
+  return str;
+}
+
+// Walk DOM and apply translations to every [data-i18n] and [data-i18n-placeholder]
+function applyI18n() {
+  document.documentElement.lang = currentLang;
+  document.title = t('page_title');
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    el.textContent = t(key);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    const key = el.getAttribute('data-i18n-placeholder');
+    el.setAttribute('placeholder', t(key));
+  });
+  // CSV notes list (HTML allowed)
+  const notesList = document.getElementById('csv-notes-list');
+  if (notesList) {
+    notesList.innerHTML = [
+      t('csv.note_condition'),
+      t('csv.note_lang'),
+      t('csv.note_tags'),
+      t('csv.note_separator'),
+      t('csv.note_images'),
+    ].map(h => '<li>' + h + '</li>').join('');
+  }
+}
+
+function setLang(lang) {
+  if (!I18N[lang]) return;
+  currentLang = lang;
+  localStorage.setItem('apa_lang', lang);
+  applyI18n();
+  // Re-render dynamic content
+  if (state.user) {
+    renderProducts();
+    renderCategoryOptions();
+  }
+  renderOtherLangFields();
+}
+
+// ============================================================
+// STATE & CONFIG
+// ============================================================
+
+const API = 'https://afcarparts-com.onrender.com'; // absolute URL: funktioniert auf Hostinger und Render
+const SUPPORTED_LANGS = ['de', 'en', 'fr', 'pt', 'ar'];
+const LANG_LABELS = { de: 'Deutsch', en: 'English', fr: 'Français', pt: 'Português', ar: 'العربية' };
+
+let state = {
+  jwt: null,
+  user: null,
+  products: [],
+  categories: [],
+  editingId: null,
+  uploadedImages: [], // URLs der hochgeladenen Bilder
+};
+
+// ============================================================
+// API HELPERS
+// ============================================================
+
+async function api(path, options = {}) {
+  const opts = { ...options, headers: { ...(options.headers || {}) } };
+  if (state.jwt) opts.headers['Authorization'] = 'Bearer ' + state.jwt;
+  if (opts.body && typeof opts.body !== 'string' && !(opts.body instanceof FormData)) {
+    opts.body = JSON.stringify(opts.body);
+    opts.headers['Content-Type'] = 'application/json';
+  }
+  const res = await fetch(API + path, opts);
+  if (res.status === 401) {
+    logout();
+    throw new Error(t('auth.session_expired'));
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+// ============================================================
+// AUTH
+// ============================================================
+
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const submit = document.getElementById('login-submit');
+  const errorEl = document.getElementById('login-error');
+  errorEl.classList.add('hidden');
+  submit.disabled = true;
+  submit.textContent = t('auth.signing_in');
+  
+  try {
+    const email = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    const data = await api('/api/auth/login', {
+      method: 'POST',
+      body: { email, password },
+    });
+    
+    state.jwt = data.accessToken;
+    state.user = data.user;
+    // Token in BEIDEN Formaten speichern: legacy (jwt/user) + SPA-kompatibel (apa_token/apa_user)
+    localStorage.setItem('jwt', state.jwt);
+    localStorage.setItem('user', JSON.stringify(state.user));
+    localStorage.setItem('apa_token', state.jwt);
+    localStorage.setItem('apa_user', JSON.stringify(state.user));
+    // Redirect zur SPA — dort lebt jetzt das eigentliche Dashboard (Hub mit Modulen)
+    window.location.href = '/#seller-dashboard';
+    return;
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.classList.remove('hidden');
+  } finally {
+    submit.disabled = false;
+    submit.textContent = t('auth.sign_in');
+  }
+});
+
+// Tab-Switch (Login / Register)
+document.querySelectorAll('.tab').forEach(tabBtn => {
+  tabBtn.addEventListener('click', () => {
+    const target = tabBtn.dataset.tab;
+    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === tabBtn));
+    document.getElementById('login-form').classList.toggle('hidden', target !== 'login');
+    document.getElementById('register-form').classList.toggle('hidden', target !== 'register');
+    document.getElementById('login-error').classList.add('hidden');
+    document.getElementById('register-error').classList.add('hidden');
+  });
+});
+
+// Register-Form (immer als Händler)
+document.getElementById('register-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const submit = document.getElementById('register-submit');
+  const errorEl = document.getElementById('register-error');
+  errorEl.classList.add('hidden');
+  submit.disabled = true;
+  submit.textContent = t('auth.registering');
+  
+  try {
+    const data = await api('/api/auth/register', {
+      method: 'POST',
+      body: {
+        name: document.getElementById('reg-name').value.trim(),
+        email: document.getElementById('reg-email').value.trim(),
+        password: document.getElementById('reg-password').value,
+        phone: document.getElementById('reg-phone').value.trim() || null,
+        country: document.getElementById('reg-country').value.trim() || null,
+        role: 'dealer',  // ← hartkodiert: Registrierung über dieses Dashboard = immer Händler
+      },
+    });
+    
+    state.jwt = data.accessToken;
+    state.user = data.user;
+    // Token in BEIDEN Formaten speichern: legacy + SPA-kompatibel
+    localStorage.setItem('jwt', state.jwt);
+    localStorage.setItem('user', JSON.stringify(state.user));
+    localStorage.setItem('apa_token', state.jwt);
+    localStorage.setItem('apa_user', JSON.stringify(state.user));
+    // Redirect zur SPA — neuer Händler landet direkt im Hub
+    window.location.href = '/#seller-dashboard';
+    return;
+  } catch (err) {
+    let msg = err.message;
+    if (msg === 'email_already_exists') msg = t('auth.email_exists');
+    if (msg === 'password_too_short') msg = t('auth.password_too_short');
+    if (msg === 'email_password_required') msg = t('auth.email_password_required');
+    errorEl.textContent = msg;
+    errorEl.classList.remove('hidden');
+  } finally {
+    submit.disabled = false;
+    submit.textContent = t('auth.register_as_dealer');
+  }
+});
+
+// URL-Parameter: ?tab=register öffnet direkt Register-Tab
+if (new URLSearchParams(window.location.search).get('tab') === 'register') {
+  document.querySelector('.tab[data-tab="register"]')?.click();
+}
+
+document.getElementById('logout-btn').addEventListener('click', logout);
+
+function logout() {
+  state.jwt = null;
+  state.user = null;
+  localStorage.removeItem('jwt');
+  localStorage.removeItem('user');
+  // Auch SPA-kompatible Keys mitsäubern, damit nach Logout
+  // beide Seiten konsistent sind
+  localStorage.removeItem('apa_token');
+  localStorage.removeItem('apa_user');
+  // Optional: Backend abmelden
+  fetch(API + '/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('dashboard-screen').classList.add('hidden');
+}
+
+// ============================================================
+// DASHBOARD INIT
+// ============================================================
+
+async function showDashboard() {
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('dashboard-screen').classList.remove('hidden');
+  document.getElementById('header-email').textContent = state.user.email || '';
+  document.getElementById('header-role').textContent = state.user.role || '';
+  
+  await Promise.all([loadProducts(), loadCategories()]);
+}
+
+async function loadProducts() {
+  const container = document.getElementById('products-content');
+  container.innerHTML = '<div class="loading">' + t('dash.loading_products') + '</div>';
+  try {
+    const data = await api('/api/seller/products');
+    state.products = data.data || [];
+    renderProducts();
+  } catch (err) {
+    container.innerHTML = `<div class="empty-state">${t('dash.error_prefix')}${escape(err.message)}</div>`;
+  }
+}
+
+async function loadCategories() {
+  try {
+    const data = await api('/api/categories?lang=' + currentLang);
+    state.categories = Array.isArray(data) ? data : (data.data || []);
+    renderCategoryOptions();
+  } catch (err) {
+    console.error('Categories load failed:', err);
+  }
+}
+
+function renderCategoryOptions() {
+  const select = document.getElementById('category');
+  select.innerHTML = '<option value="">' + t('product.no_category') + '</option>';
+  for (const c of state.categories) {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.name;
+    select.appendChild(opt);
+  }
+}
+
+function renderProducts() {
+  const container = document.getElementById('products-content');
+  if (state.products.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <p>${t('dash.no_products')}</p>
+        <p style="margin-top: 8px; font-size: 13px;">${t('dash.no_products_hint')}</p>
+      </div>`;
+    return;
+  }
+  
+  let html = `
+    <table>
+      <thead>
+        <tr>
+          <th>${t('dash.th_image')}</th>
+          <th>${t('dash.th_title')}</th>
+          <th>${t('dash.th_brand_model')}</th>
+          <th>${t('dash.th_oem')}</th>
+          <th>${t('dash.th_price')}</th>
+          <th>${t('dash.th_stock')}</th>
+          <th>${t('dash.th_status')}</th>
+          <th>${t('dash.th_actions')}</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+  
+  for (const p of state.products) {
+    const images = parseImages(p.images);
+    const thumb = images[0] || '';
+    html += `
+      <tr>
+        <td>${thumb ? `<img src="${escape(thumb)}" class="product-thumb" alt="">` : '<div class="product-thumb"></div>'}</td>
+        <td>${escape(p.title || t('dash.no_title'))}</td>
+        <td>${escape([p.brand, p.model].filter(Boolean).join(' '))}</td>
+        <td>${escape(p.oem || '—')}</td>
+        <td>$${parseFloat(p.price_usd).toFixed(2)}</td>
+        <td>${p.stock || 0}</td>
+        <td>${p.active ? '<span class="badge badge-active">' + t('dash.badge_active') + '</span>' : '<span class="badge badge-inactive">' + t('dash.badge_inactive') + '</span>'}</td>
+        <td>
+          <div class="table-actions">
+            <button class="btn btn-secondary btn-sm" onclick="editProduct(${p.id})">${t('dash.btn_edit')}</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteProduct(${p.id})">${t('dash.btn_delete')}</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function parseImages(images) {
+  if (!images) return [];
+  let arr = images;
+  if (typeof images === 'string') {
+    try {
+      arr = JSON.parse(images);
+      if (!Array.isArray(arr)) return [];
+    } catch { return []; }
+  }
+  if (!Array.isArray(arr)) return [];
+  // Legacy: relative URLs auf absolute umstellen, damit alte Produkte auch korrekt anzeigen
+  return arr.map(url => {
+    if (!url) return url;
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    if (url.startsWith('/')) return API + url;
+    return url;
+  });
+}
+
+function escape(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+// ============================================================
+// PRODUCT MODAL
+// ============================================================
+
+document.getElementById('new-product-btn').addEventListener('click', () => openProductModal(null));
+document.getElementById('cancel-btn').addEventListener('click', closeProductModal);
+document.getElementById('modal-close-btn').addEventListener('click', closeProductModal);
+document.getElementById('product-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'product-modal') closeProductModal();
+});
+
+document.getElementById('default-lang').addEventListener('change', updateLangHints);
+document.getElementById('other-langs-header').addEventListener('click', () => {
+  document.getElementById('other-langs-accordion').classList.toggle('closed');
+});
+
+function updateLangHints() {
+  const lang = document.getElementById('default-lang').value;
+  document.getElementById('title-lang-hint').textContent = `(${lang})`;
+  document.getElementById('desc-lang-hint').textContent = `(${lang})`;
+  renderOtherLangFields();
+}
+
+function renderOtherLangFields() {
+  const defaultLang = document.getElementById('default-lang').value;
+  const container = document.getElementById('other-langs-content');
+  container.innerHTML = '';
+  for (const lang of SUPPORTED_LANGS) {
+    if (lang === defaultLang) continue;
+    const div = document.createElement('div');
+    div.style.marginBottom = '12px';
+    div.innerHTML = `
+      <div class="form-group">
+        <label>${t('product.title_label')} (${LANG_LABELS[lang]})</label>
+        <input type="text" data-lang="${lang}" data-field="title" maxlength="200">
+      </div>
+      <div class="form-group">
+        <label>${t('product.description_label')} (${LANG_LABELS[lang]})</label>
+        <textarea data-lang="${lang}" data-field="description" rows="2"></textarea>
+      </div>
+      <hr style="border: none; border-top: 1px solid var(--border); margin: 8px 0;">
+    `;
+    container.appendChild(div);
+  }
+}
+
+async function openProductModal(productId) {
+  state.editingId = productId;
+  state.uploadedImages = [];
+  document.getElementById('product-error').classList.add('hidden');
+  document.getElementById('modal-title').textContent = productId ? t('product.edit_title') : t('product.new_title');
+  
+  // Reset form
+  document.getElementById('product-form').reset();
+  document.getElementById('default-lang').value = 'de';
+  document.getElementById('active').checked = true;
+  document.getElementById('other-langs-accordion').classList.add('closed');
+  updateLangHints();
+  
+  if (productId) {
+    // Load existing product
+    try {
+      const p = await api(`/api/seller/products/${productId}`);
+      document.getElementById('default-lang').value = p.default_lang || 'de';
+      updateLangHints();
+      
+      const defLang = p.default_lang || 'de';
+      const defTrans = (p.translations || {})[defLang] || {};
+      document.getElementById('default-title').value = defTrans.title || '';
+      document.getElementById('default-description').value = defTrans.description || '';
+      
+      // Other langs
+      for (const lang of SUPPORTED_LANGS) {
+        if (lang === defLang) continue;
+        const tr = (p.translations || {})[lang];
+        if (tr) {
+          const titleEl = document.querySelector(`[data-lang="${lang}"][data-field="title"]`);
+          const descEl = document.querySelector(`[data-lang="${lang}"][data-field="description"]`);
+          if (titleEl) titleEl.value = tr.title || '';
+          if (descEl) descEl.value = tr.description || '';
+        }
+      }
+      
+      document.getElementById('price').value = p.price_usd || '';
+      document.getElementById('stock').value = p.stock || 0;
+      document.getElementById('brand').value = p.brand || '';
+      document.getElementById('model').value = p.model || '';
+      document.getElementById('oem').value = p.oem || '';
+      document.getElementById('condition').value = p.condition || 'new';
+      document.getElementById('category').value = p.category_id || '';
+      document.getElementById('tags').value = (p.tags || []).join(', ');
+      document.getElementById('active').checked = !!p.active;
+      
+      state.uploadedImages = parseImages(p.images);
+    } catch (err) {
+      alert(t('dash.load_error') + err.message);
+      return;
+    }
+  }
+  
+  renderImageGrid();
+  document.getElementById('product-modal').classList.remove('hidden');
+}
+
+function closeProductModal() {
+  document.getElementById('product-modal').classList.add('hidden');
+  state.editingId = null;
+  state.uploadedImages = [];
+}
+
+// ============================================================
+// IMAGE UPLOAD
+// ============================================================
+
+function renderImageGrid() {
+  const grid = document.getElementById('image-grid');
+  grid.innerHTML = '';
+  
+  for (let i = 0; i < state.uploadedImages.length; i++) {
+    const url = state.uploadedImages[i];
+    const div = document.createElement('div');
+    div.className = 'image-thumb';
+    div.innerHTML = `
+      <img src="${escape(url)}" alt="">
+      <button type="button" class="remove-img" data-idx="${i}">×</button>
+    `;
+    grid.appendChild(div);
+  }
+  
+  if (state.uploadedImages.length < 5) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'image-upload-btn';
+    btn.innerHTML = `<span style="font-size:24px;">+</span><span>${t('product.add_image')}</span>`;
+    btn.addEventListener('click', () => document.getElementById('image-input').click());
+    grid.appendChild(btn);
+  }
+  
+  // Remove handlers
+  grid.querySelectorAll('.remove-img').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const idx = parseInt(e.target.dataset.idx, 10);
+      state.uploadedImages.splice(idx, 1);
+      renderImageGrid();
+    });
+  });
+}
+
+document.getElementById('image-input').addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files);
+  e.target.value = ''; // reset
+  if (files.length === 0) return;
+  
+  const remaining = 5 - state.uploadedImages.length;
+  if (files.length > remaining) {
+    alert(t('product.max_more', { n: remaining }));
+    return;
+  }
+  
+  // Validate
+  for (const f of files) {
+    if (!['image/jpeg', 'image/png'].includes(f.type)) {
+      alert(t('product.not_jpg_png', { name: f.name }));
+      return;
+    }
+    if (f.size > 2 * 1024 * 1024) {
+      alert(t('product.too_large_img', { name: f.name }));
+      return;
+    }
+  }
+  
+  // Upload
+  const fd = new FormData();
+  for (const f of files) fd.append('images', f);
+  
+  try {
+    const data = await api('/api/upload/images', { method: 'POST', body: fd });
+    state.uploadedImages.push(...(data.urls || []));
+    renderImageGrid();
+  } catch (err) {
+    alert(t('product.upload_error') + err.message);
+  }
+});
+
+// ============================================================
+// SAVE PRODUCT
+// ============================================================
+
+document.getElementById('product-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorEl = document.getElementById('product-error');
+  const saveBtn = document.getElementById('save-btn');
+  errorEl.classList.add('hidden');
+  saveBtn.disabled = true;
+  saveBtn.textContent = t('common.saving');
+  
+  try {
+    const defaultLang = document.getElementById('default-lang').value;
+    const translations = {};
+    translations[defaultLang] = {
+      title: document.getElementById('default-title').value.trim(),
+      description: document.getElementById('default-description').value.trim() || null,
+    };
+    
+    // Other langs
+    for (const lang of SUPPORTED_LANGS) {
+      if (lang === defaultLang) continue;
+      const titleEl = document.querySelector(`[data-lang="${lang}"][data-field="title"]`);
+      const descEl = document.querySelector(`[data-lang="${lang}"][data-field="description"]`);
+      const title = titleEl?.value.trim() || '';
+      const desc = descEl?.value.trim() || '';
+      if (title) {
+        translations[lang] = { title, description: desc || null };
+      }
+    }
+    
+    const tagsRaw = document.getElementById('tags').value.trim();
+    const tags = tagsRaw ? tagsRaw.split(',').map(t => t.trim()).filter(Boolean) : [];
+    
+    const payload = {
+      default_lang: defaultLang,
+      translations,
+      price_usd: parseFloat(document.getElementById('price').value),
+      stock: parseInt(document.getElementById('stock').value, 10) || 0,
+      brand: document.getElementById('brand').value.trim() || null,
+      model: document.getElementById('model').value.trim() || null,
+      oem: document.getElementById('oem').value.trim() || null,
+      condition: document.getElementById('condition').value,
+      category_id: document.getElementById('category').value || null,
+      images: state.uploadedImages,
+      tags,
+      active: document.getElementById('active').checked,
+    };
+    
+    if (state.editingId) {
+      await api(`/api/seller/products/${state.editingId}`, { method: 'PUT', body: payload });
+    } else {
+      await api('/api/seller/products', { method: 'POST', body: payload });
+    }
+    
+    closeProductModal();
+    await loadProducts();
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.classList.remove('hidden');
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = t('common.save');
+  }
+});
+
+// ============================================================
+// CSV IMPORT
+// ============================================================
+
+document.getElementById('csv-import-btn').addEventListener('click', () => {
+  document.getElementById('csv-error').classList.add('hidden');
+  document.getElementById('csv-success').classList.add('hidden');
+  document.getElementById('csv-file').value = '';
+  document.getElementById('csv-modal').classList.remove('hidden');
+});
+
+document.getElementById('csv-cancel-btn').addEventListener('click', closeCsvModal);
+document.getElementById('csv-modal-close-btn').addEventListener('click', closeCsvModal);
+document.getElementById('csv-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'csv-modal') closeCsvModal();
+});
+
+function closeCsvModal() {
+  document.getElementById('csv-modal').classList.add('hidden');
+}
+
+document.getElementById('csv-upload-btn').addEventListener('click', async () => {
+  const fileInput = document.getElementById('csv-file');
+  const errorEl = document.getElementById('csv-error');
+  const successEl = document.getElementById('csv-success');
+  const uploadBtn = document.getElementById('csv-upload-btn');
+  errorEl.classList.add('hidden');
+  successEl.classList.add('hidden');
+  
+  const file = fileInput.files[0];
+  if (!file) {
+    errorEl.textContent = t('csv.please_choose');
+    errorEl.classList.remove('hidden');
+    return;
+  }
+  
+  if (file.size > 5 * 1024 * 1024) {
+    errorEl.textContent = t('csv.too_large');
+    errorEl.classList.remove('hidden');
+    return;
+  }
+  
+  uploadBtn.disabled = true;
+  uploadBtn.textContent = t('csv.importing');
+  
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const data = await api('/api/seller/csv-import', { method: 'POST', body: fd });
+    
+    let msg = `✅ ` + t('csv.imported', { n: data.imported });
+    if (data.skipped > 0) msg += `, ` + t('csv.skipped', { n: data.skipped });
+    if (data.errors && data.errors.length > 0) {
+      msg += '\n\n' + t('csv.errors_label') + '\n' + data.errors.slice(0, 5).map(e => '• ' + e).join('\n');
+    }
+    successEl.textContent = msg;
+    successEl.style.whiteSpace = 'pre-wrap';
+    successEl.classList.remove('hidden');
+    
+    await loadProducts();
+  } catch (err) {
+    errorEl.textContent = t('dash.error_prefix') + err.message;
+    errorEl.classList.remove('hidden');
+  } finally {
+    uploadBtn.disabled = false;
+    uploadBtn.textContent = t('csv.upload_import');
+  }
+});
+
+// ============================================================
+// EDIT / DELETE (global für onclick)
+// ============================================================
+
+window.editProduct = function(id) {
+  openProductModal(id);
+};
+
+window.deleteProduct = async function(id) {
+  if (!confirm(t('dash.delete_confirm'))) return;
+  try {
+    await api(`/api/seller/products/${id}`, { method: 'DELETE' });
+    await loadProducts();
+  } catch (err) {
+    alert(t('dash.error_prefix') + err.message);
+  }
+};
+
+// ============================================================
+// INIT
+// ============================================================
+
+// Language switcher: setup all .lang-select dropdowns + sync them
+(function setupLangSwitcher() {
+  const sels = document.querySelectorAll('.lang-select');
+  sels.forEach(sel => {
+    sel.value = currentLang;
+    sel.addEventListener('change', () => {
+      const newLang = sel.value;
+      setLang(newLang);
+      // sync other dropdowns
+      sels.forEach(other => { if (other !== sel) other.value = newLang; });
+    });
+  });
+})();
+
+// Apply i18n once on first render
+applyI18n();
+
+(async function init() {
+  // Prüfe BEIDE Key-Formate (legacy: jwt/user, SPA: apa_token/apa_user)
+  const savedJwt = localStorage.getItem('jwt') || localStorage.getItem('apa_token');
+  const savedUser = localStorage.getItem('user') || localStorage.getItem('apa_user');
+
+  if (savedJwt && savedUser) {
+    state.jwt = savedJwt;
+    state.user = JSON.parse(savedUser);
+
+    // Token gültig? Falls ja → direkt zur SPA durchleiten.
+    // Falls nicht → Tokens räumen und Login-Screen zeigen.
+    try {
+      const data = await api('/api/auth/me');
+      state.user = data.user;
+      // Bei Erfolg: BEIDE Key-Formate aktualisieren
+      localStorage.setItem('jwt', savedJwt);
+      localStorage.setItem('user', JSON.stringify(state.user));
+      localStorage.setItem('apa_token', savedJwt);
+      localStorage.setItem('apa_user', JSON.stringify(state.user));
+      window.location.href = '/#seller-dashboard';
+      return;
+    } catch {
+      logout();
+    }
+  }
+})();
+
+
+// ============================================================
+// ONBOARDING-TOUR (eigenständig, 5 Sprachen, folgt dem Sprachumschalter)
+// ============================================================
+(function () {
+  var STR = {
+    de: {
+      step: 'Schritt', replay: 'Erneut abspielen',
+      home_nav: 'Teile finden', home_h: 'Auto-Ersatzteile für ganz Afrika',
+      home_sub: 'Verkaufe neue, gebrauchte & Großhandels-Teile an Tausende Käufer.',
+      home_cta: 'Verkäufer werden',
+      reg_title: 'Als Händler registrieren', reg_name: 'Name oder Firma', reg_email: 'E-Mail',
+      reg_pass: 'Passwort', reg_role: 'Rolle', role_buyer: 'Käufer', role_seller: 'Verkäufer',
+      reg_btn: 'Registrieren',
+      dash_hi: 'Willkommen, Händler', mod_abo: 'Abo & Mitgliedschaft', mod_abo_d: 'Plan wählen & verwalten',
+      mod_payout: 'Auszahlung einrichten', mod_products: 'Produkte', mod_csv: 'CSV-Import',
+      abo_title: 'Abo & Mitgliedschaft', abo_sub: 'Dein Shop ist nur mit aktivem Abo freigeschaltet.',
+      plan_basic: 'Bis zu 10 Produkte', plan_pro: 'Bis zu 100 Produkte', subscribe: 'Abonnieren',
+      toast_pay: 'Weiterleitung zur Zahlung … Stripe / Paystack – je nach Standort',
+      abo_active: '✓ Abo aktiv',
+      payout_title: 'Auszahlung einrichten', payout_sub: 'Wähle deine Region – wir richten die passende Methode ein.',
+      r_africa: 'Afrika', r_africa_d: 'Mobile Money & lokale Bank', r_asia: 'Asien', r_eu: 'Europa & USA',
+      payout_ok: '✓ Auszahlung verbunden · Paystack',
+      prod_title: 'Produkte', prod_new: '+ Neues Produkt', f_title: 'Titel', f_price: 'Preis (USD)',
+      f_brand: 'Marke', upload_btn: '📤 Bilder hochladen', create_btn: '✚ Erstellen',
+      success: 'Produkt ist live! 🎉 Dein Shop ist startklar.',
+      cap1: 'Klicke auf der Startseite auf „Verkäufer werden".',
+      cap2: 'Wähle die Rolle „Verkäufer" und registriere dich.',
+      cap3: 'Im Dashboard öffnest du „Abo & Mitgliedschaft".',
+      cap4: 'Plan wählen – die Zahlung läuft je nach Land über Stripe oder Paystack.',
+      cap5: 'Region wählen: Afrika → Paystack, Asien/Europa → Stripe.',
+      cap6: 'Lade dein erstes Produkt mit Fotos hoch – fertig!',
+      cap_end: 'In 6 Schritten zum Händler auf AFCARPARTS.',
+      p_kicker: 'In 2 Minuten startklar', p_head: 'So wirst du Händler – Schritt für Schritt',
+      p_sub: 'Schau dir die kurze Tour an oder registriere dich direkt. Du hast die Wahl.',
+      p_s1: 'Registrieren', p_s2: 'Abo wählen (Stripe / Paystack)', p_s3: 'Auszahlung einrichten', p_s4: 'Produkte hochladen',
+      p_watch: 'Kurze Tour ansehen', p_skip: 'Kein Muss – du kannst dich auch direkt registrieren.'
+    },
+    en: {
+      step: 'Step', replay: 'Play again',
+      home_nav: 'Find parts', home_h: 'Auto spare parts for all of Africa',
+      home_sub: 'Sell new, used & wholesale parts to thousands of buyers.',
+      home_cta: 'Become a seller',
+      reg_title: 'Register as a dealer', reg_name: 'Name or company', reg_email: 'Email',
+      reg_pass: 'Password', reg_role: 'Role', role_buyer: 'Buyer', role_seller: 'Seller',
+      reg_btn: 'Register',
+      dash_hi: 'Welcome, dealer', mod_abo: 'Subscription', mod_abo_d: 'Choose & manage your plan',
+      mod_payout: 'Set up payouts', mod_products: 'Products', mod_csv: 'CSV import',
+      abo_title: 'Subscription & Membership', abo_sub: 'Your shop is only unlocked with an active subscription.',
+      plan_basic: 'Up to 10 products', plan_pro: 'Up to 100 products', subscribe: 'Subscribe',
+      toast_pay: 'Redirecting to payment … Stripe / Paystack – based on your location',
+      abo_active: '✓ Subscription active',
+      payout_title: 'Set up payouts', payout_sub: 'Choose your region – we set up the right method.',
+      r_africa: 'Africa', r_africa_d: 'Mobile money & local bank', r_asia: 'Asia', r_eu: 'Europe & USA',
+      payout_ok: '✓ Payout connected · Paystack',
+      prod_title: 'Products', prod_new: '+ New product', f_title: 'Title', f_price: 'Price (USD)',
+      f_brand: 'Brand', upload_btn: '📤 Upload images', create_btn: '✚ Create',
+      success: 'Product is live! 🎉 Your shop is ready.',
+      cap1: 'On the home page, click "Become a seller".',
+      cap2: 'Pick the "Seller" role and register.',
+      cap3: 'In the dashboard, open "Subscription".',
+      cap4: 'Choose a plan – payment runs via Stripe or Paystack depending on your country.',
+      cap5: 'Choose region: Africa → Paystack, Asia/Europe → Stripe.',
+      cap6: 'Upload your first product with photos – done!',
+      cap_end: 'Become a dealer on AFCARPARTS in 6 steps.',
+      p_kicker: 'Ready in 2 minutes', p_head: 'How to become a dealer – step by step',
+      p_sub: 'Watch the short tour or register right away. Your choice.',
+      p_s1: 'Register', p_s2: 'Choose a plan (Stripe / Paystack)', p_s3: 'Set up payouts', p_s4: 'Upload products',
+      p_watch: 'Watch the short tour', p_skip: 'No obligation – you can also register directly.'
+    },
+    fr: {
+      step: 'Étape', replay: 'Revoir',
+      home_nav: 'Trouver des pièces', home_h: 'Pièces auto pour toute l’Afrique',
+      home_sub: 'Vendez des pièces neuves, d’occasion et en gros à des milliers d’acheteurs.',
+      home_cta: 'Devenir vendeur',
+      reg_title: 'S’inscrire comme revendeur', reg_name: 'Nom ou société', reg_email: 'E-mail',
+      reg_pass: 'Mot de passe', reg_role: 'Rôle', role_buyer: 'Acheteur', role_seller: 'Vendeur',
+      reg_btn: 'S’inscrire',
+      dash_hi: 'Bienvenue, revendeur', mod_abo: 'Abonnement', mod_abo_d: 'Choisir & gérer le forfait',
+      mod_payout: 'Configurer les versements', mod_products: 'Produits', mod_csv: 'Import CSV',
+      abo_title: 'Abonnement', abo_sub: 'Votre boutique n’est active qu’avec un abonnement actif.',
+      plan_basic: 'Jusqu’à 10 produits', plan_pro: 'Jusqu’à 100 produits', subscribe: 'S’abonner',
+      toast_pay: 'Redirection vers le paiement … Stripe / Paystack – selon votre pays',
+      abo_active: '✓ Abonnement actif',
+      payout_title: 'Configurer les versements', payout_sub: 'Choisissez votre région – nous configurons la bonne méthode.',
+      r_africa: 'Afrique', r_africa_d: 'Mobile money & banque locale', r_asia: 'Asie', r_eu: 'Europe & USA',
+      payout_ok: '✓ Versement connecté · Paystack',
+      prod_title: 'Produits', prod_new: '+ Nouveau produit', f_title: 'Titre', f_price: 'Prix (USD)',
+      f_brand: 'Marque', upload_btn: '📤 Ajouter des photos', create_btn: '✚ Créer',
+      success: 'Produit en ligne ! 🎉 Votre boutique est prête.',
+      cap1: 'Sur la page d’accueil, cliquez sur « Devenir vendeur ».',
+      cap2: 'Choisissez le rôle « Vendeur » et inscrivez-vous.',
+      cap3: 'Dans le tableau de bord, ouvrez « Abonnement ».',
+      cap4: 'Choisissez un forfait – le paiement passe par Stripe ou Paystack selon le pays.',
+      cap5: 'Choisissez la région : Afrique → Paystack, Asie/Europe → Stripe.',
+      cap6: 'Ajoutez votre premier produit avec photos – terminé !',
+      cap_end: 'Devenez revendeur sur AFCARPARTS en 6 étapes.',
+      p_kicker: 'Prêt en 2 minutes', p_head: 'Comment devenir revendeur – étape par étape',
+      p_sub: 'Regardez la courte visite ou inscrivez-vous directement. À vous de choisir.',
+      p_s1: 'S’inscrire', p_s2: 'Choisir un forfait (Stripe / Paystack)', p_s3: 'Configurer les versements', p_s4: 'Ajouter des produits',
+      p_watch: 'Voir la courte visite', p_skip: 'Sans obligation – vous pouvez aussi vous inscrire directement.'
+    },
+    pt: {
+      step: 'Passo', replay: 'Ver de novo',
+      home_nav: 'Encontrar peças', home_h: 'Peças auto para toda a África',
+      home_sub: 'Venda peças novas, usadas e a grosso a milhares de compradores.',
+      home_cta: 'Tornar-se vendedor',
+      reg_title: 'Registar como revendedor', reg_name: 'Nome ou empresa', reg_email: 'E-mail',
+      reg_pass: 'Palavra-passe', reg_role: 'Função', role_buyer: 'Comprador', role_seller: 'Vendedor',
+      reg_btn: 'Registar',
+      dash_hi: 'Bem-vindo, revendedor', mod_abo: 'Subscrição', mod_abo_d: 'Escolher & gerir o plano',
+      mod_payout: 'Configurar pagamentos', mod_products: 'Produtos', mod_csv: 'Importar CSV',
+      abo_title: 'Subscrição', abo_sub: 'A sua loja só fica ativa com uma subscrição ativa.',
+      plan_basic: 'Até 10 produtos', plan_pro: 'Até 100 produtos', subscribe: 'Subscrever',
+      toast_pay: 'A encaminhar para o pagamento … Stripe / Paystack – conforme o país',
+      abo_active: '✓ Subscrição ativa',
+      payout_title: 'Configurar pagamentos', payout_sub: 'Escolha a sua região – configuramos o método certo.',
+      r_africa: 'África', r_africa_d: 'Mobile money & banco local', r_asia: 'Ásia', r_eu: 'Europa & EUA',
+      payout_ok: '✓ Pagamento ligado · Paystack',
+      prod_title: 'Produtos', prod_new: '+ Novo produto', f_title: 'Título', f_price: 'Preço (USD)',
+      f_brand: 'Marca', upload_btn: '📤 Carregar fotos', create_btn: '✚ Criar',
+      success: 'Produto online! 🎉 A sua loja está pronta.',
+      cap1: 'Na página inicial, clique em «Tornar-se vendedor».',
+      cap2: 'Escolha a função «Vendedor» e registe-se.',
+      cap3: 'No painel, abra «Subscrição».',
+      cap4: 'Escolha um plano – o pagamento usa Stripe ou Paystack conforme o país.',
+      cap5: 'Escolha a região: África → Paystack, Ásia/Europa → Stripe.',
+      cap6: 'Carregue o seu primeiro produto com fotos – pronto!',
+      cap_end: 'Torne-se revendedor na AFCARPARTS em 6 passos.',
+      p_kicker: 'Pronto em 2 minutos', p_head: 'Como tornar-se revendedor – passo a passo',
+      p_sub: 'Veja a breve visita ou registe-se já. A escolha é sua.',
+      p_s1: 'Registar', p_s2: 'Escolher um plano (Stripe / Paystack)', p_s3: 'Configurar pagamentos', p_s4: 'Carregar produtos',
+      p_watch: 'Ver a breve visita', p_skip: 'Sem obrigação – também pode registar-se diretamente.'
+    },
+    es: {
+      step: 'Paso', replay: 'Ver de nuevo',
+      home_nav: 'Buscar piezas', home_h: 'Repuestos de auto para toda África',
+      home_sub: 'Vende piezas nuevas, usadas y al por mayor a miles de compradores.',
+      home_cta: 'Hazte vendedor',
+      reg_title: 'Registrarse como distribuidor', reg_name: 'Nombre o empresa', reg_email: 'Correo',
+      reg_pass: 'Contraseña', reg_role: 'Rol', role_buyer: 'Comprador', role_seller: 'Vendedor',
+      reg_btn: 'Registrarse',
+      dash_hi: 'Bienvenido, distribuidor', mod_abo: 'Suscripción', mod_abo_d: 'Elegir y gestionar el plan',
+      mod_payout: 'Configurar pagos', mod_products: 'Productos', mod_csv: 'Importar CSV',
+      abo_title: 'Suscripción', abo_sub: 'Tu tienda solo se activa con una suscripción activa.',
+      plan_basic: 'Hasta 10 productos', plan_pro: 'Hasta 100 productos', subscribe: 'Suscribirse',
+      toast_pay: 'Redirigiendo al pago … Stripe / Paystack – según tu país',
+      abo_active: '✓ Suscripción activa',
+      payout_title: 'Configurar pagos', payout_sub: 'Elige tu región – configuramos el método adecuado.',
+      r_africa: 'África', r_africa_d: 'Mobile money y banco local', r_asia: 'Asia', r_eu: 'Europa y EE. UU.',
+      payout_ok: '✓ Pago conectado · Paystack',
+      prod_title: 'Productos', prod_new: '+ Nuevo producto', f_title: 'Título', f_price: 'Precio (USD)',
+      f_brand: 'Marca', upload_btn: '📤 Subir fotos', create_btn: '✚ Crear',
+      success: '¡Producto publicado! 🎉 Tu tienda está lista.',
+      cap1: 'En la página de inicio, haz clic en «Hazte vendedor».',
+      cap2: 'Elige el rol «Vendedor» y regístrate.',
+      cap3: 'En el panel, abre «Suscripción».',
+      cap4: 'Elige un plan – el pago se hace con Stripe o Paystack según el país.',
+      cap5: 'Elige la región: África → Paystack, Asia/Europa → Stripe.',
+      cap6: 'Sube tu primer producto con fotos – ¡listo!',
+      cap_end: 'Conviértete en distribuidor en AFCARPARTS en 6 pasos.',
+      p_kicker: 'Listo en 2 minutos', p_head: 'Cómo ser distribuidor – paso a paso',
+      p_sub: 'Mira la breve visita o regístrate directamente. Tú eliges.',
+      p_s1: 'Registrarse', p_s2: 'Elegir un plan (Stripe / Paystack)', p_s3: 'Configurar pagos', p_s4: 'Subir productos',
+      p_watch: 'Ver la breve visita', p_skip: 'Sin compromiso – también puedes registrarte directamente.'
+    }
+  };
+
+  function curLang() {
+    try { if (window.currentLang && STR[window.currentLang]) return window.currentLang; } catch (e) {}
+    try { var s = localStorage.getItem('apa_lang'); if (s && STR[s]) return s; } catch (e) {}
+    return 'de';
+  }
+
+  var lang = curLang();
+  function L() { return STR[lang] || STR.de; }
+
+  // -------- Screen markup builders --------
+  var NAVY = '#003057', ORANGE = '#ED2807';
+  function box(inner) { return inner; }
+
+  function screensHTML(x) {
+    var head =
+      '<div style="height:50px;background:' + NAVY + ';display:flex;align-items:center;gap:16px;padding:0 22px">' +
+        '<div style="font-family:\'Barlow Condensed\';font-weight:800;font-size:19px;color:#fff;display:flex;align-items:center;gap:8px"><span style="width:12px;height:12px;background:' + ORANGE + ';border-radius:3px"></span>AFCARPARTS</div>' +
+        '<div style="flex:1"></div>' +
+        '<div style="color:#c3d2e2;font-size:13px">' + x.home_nav + '</div>' +
+      '</div>';
+
+    var s1 =
+      head +
+      '<div style="padding:40px 30px;text-align:center">' +
+        '<div style="font-family:\'Barlow Condensed\';font-weight:800;font-size:29px;color:' + NAVY + ';line-height:1.12">' + x.home_h + '</div>' +
+        '<div style="color:#5a6675;font-size:14px;margin:12px auto 28px;max-width:420px">' + x.home_sub + '</div>' +
+        '<button data-tt="becomeSeller" class="tk-btn" style="font-size:15px;padding:14px 28px;border:none;cursor:default">' + x.home_cta + '</button>' +
+      '</div>';
+
+    var fld = function (label, val, ph) {
+      return '<div style="margin-bottom:11px;text-align:left">' +
+        '<div style="font-size:12px;color:#5a6675;margin-bottom:4px">' + label + '</div>' +
+        '<div style="height:34px;border:1px solid #dfe3ea;border-radius:7px;background:#fff;display:flex;align-items:center;padding:0 10px;font-size:13px;color:' + (val ? '#14181F' : '#b6bcc6') + '">' + (val || ph || '') + '</div></div>';
+    };
+    var s2 =
+      '<div style="max-width:380px;margin:26px auto 0;padding:0 24px">' +
+        '<div style="font-family:\'Barlow Condensed\';font-weight:800;font-size:22px;color:' + NAVY + ';margin-bottom:16px;text-align:center">' + x.reg_title + '</div>' +
+        fld(x.reg_name, 'Kwame Auto Parts') +
+        fld(x.reg_email, 'kwame@shop.gh') +
+        '<div style="margin-bottom:11px;text-align:left">' +
+          '<div style="font-size:12px;color:#5a6675;margin-bottom:4px">' + x.reg_role + '</div>' +
+          '<div data-tt="roleSelect" style="height:34px;border:1px solid #dfe3ea;border-radius:7px;background:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 10px;font-size:13px;color:#14181F">' +
+            '<span data-tt="roleValue">' + x.role_buyer + '</span><span style="color:#9aa3af">▾</span></div></div>' +
+        '<button data-tt="registerBtn" class="tk-btn" style="width:100%;font-size:14px;padding:12px;border:none;margin-top:6px;cursor:default">' + x.reg_btn + '</button>' +
+      '</div>';
+
+    var tile = function (tt, icon, title, desc, accent) {
+      return '<div' + (tt ? ' data-tt="' + tt + '"' : '') + ' style="border:1px solid ' + (accent ? ORANGE : '#e4e8ee') + ';border-radius:11px;padding:14px;background:#fff;text-align:left">' +
+        '<div style="font-size:22px">' + icon + '</div>' +
+        '<div style="font-weight:700;font-size:14px;margin-top:6px;color:' + NAVY + '">' + title + '</div>' +
+        (desc ? '<div style="font-size:11.5px;color:#7a828f;margin-top:2px">' + desc + '</div>' : '') + '</div>';
+    };
+    var s3 =
+      head.replace(x.home_nav, x.dash_hi) +
+      '<div style="padding:22px 26px">' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+          tile('tileAbo', '💳', x.mod_abo, x.mod_abo_d, true) +
+          tile('', '🏦', x.mod_payout, '') +
+          tile('', '📦', x.mod_products, '') +
+          tile('', '📤', x.mod_csv, '') +
+        '</div></div>';
+
+    var plan = function (tt, name, feat, accent) {
+      return '<div style="flex:1;border:2px solid ' + (accent ? ORANGE : '#e4e8ee') + ';border-radius:12px;padding:18px;text-align:center;background:#fff">' +
+        '<div style="font-weight:800;font-size:19px;color:' + NAVY + '">' + name + '</div>' +
+        '<div style="font-size:12.5px;color:#7a828f;margin:8px 0 14px">' + feat + '</div>' +
+        '<button' + (tt ? ' data-tt="' + tt + '"' : '') + ' class="tk-btn" style="width:100%;font-size:13px;padding:10px;border:none;cursor:default">' + L().subscribe + '</button></div>';
+    };
+    var s4 =
+      '<div style="padding:26px 28px;position:relative">' +
+        '<div style="font-family:\'Barlow Condensed\';font-weight:800;font-size:21px;color:' + NAVY + '">💳 ' + x.abo_title + '</div>' +
+        '<div style="font-size:13px;color:#7a828f;margin:6px 0 20px">' + x.abo_sub + '</div>' +
+        '<div style="display:flex;gap:14px">' + plan('', 'Basic', x.plan_basic, false) + plan('proSubscribe', 'Pro', x.plan_pro, true) + '</div>' +
+        '<div data-tt="payToast" style="display:none;position:absolute;left:50%;bottom:18px;transform:translateX(-50%);background:' + NAVY + ';color:#fff;font-size:12.5px;padding:9px 14px;border-radius:9px;white-space:nowrap;box-shadow:0 8px 20px rgba(0,0,0,.25)">' + x.toast_pay + '</div>' +
+        '<div data-tt="aboActive" style="display:none;position:absolute;left:50%;bottom:18px;transform:translateX(-50%);background:#16a34a;color:#fff;font-size:13px;font-weight:700;padding:9px 16px;border-radius:9px">' + x.abo_active + '</div>' +
+      '</div>';
+
+    var region = function (tt, emoji, title, desc, accent) {
+      return '<div' + (tt ? ' data-tt="' + tt + '"' : '') + ' style="display:flex;gap:12px;align-items:center;border:1px solid ' + (accent ? ORANGE : '#e4e8ee') + ';border-radius:11px;padding:13px 15px;background:#fff;margin-bottom:10px">' +
+        '<div style="font-size:22px">' + emoji + '</div>' +
+        '<div style="flex:1;text-align:left"><div style="font-weight:700;font-size:14px;color:' + NAVY + '">' + title + '</div>' +
+        (desc ? '<div style="font-size:11.5px;color:#7a828f">' + desc + '</div>' : '') + '</div>' +
+        '<div style="color:#c0c6cf;font-size:18px">›</div></div>';
+    };
+    var s5 =
+      '<div style="padding:26px 28px;position:relative">' +
+        '<div style="font-family:\'Barlow Condensed\';font-weight:800;font-size:21px;color:' + NAVY + '">🏦 ' + x.payout_title + '</div>' +
+        '<div style="font-size:13px;color:#7a828f;margin:6px 0 18px">' + x.payout_sub + '</div>' +
+        region('regAfrica', '🌍', x.r_africa, x.r_africa_d, true) +
+        region('', '🌏', x.r_asia, 'Stripe', false) +
+        region('', '🇪🇺', x.r_eu, 'Stripe', false) +
+        '<div data-tt="payoutOk" style="display:none;margin-top:6px;background:#eaf6ee;color:#0a7d36;border:1px solid #b7e3c4;font-size:12.5px;font-weight:600;padding:8px 12px;border-radius:9px;text-align:left">' + x.payout_ok + '</div>' +
+      '</div>';
+
+    var s6 =
+      '<div style="padding:24px 28px;position:relative">' +
+        '<div style="font-family:\'Barlow Condensed\';font-weight:800;font-size:21px;color:' + NAVY + ';margin-bottom:14px">📦 ' + x.prod_title + '</div>' +
+        '<div style="border:1px solid #e4e8ee;border-radius:11px;padding:16px;background:#fbfcfd">' +
+          fld(x.f_title, 'Bremsbelag-Satz') +
+          '<div style="display:flex;gap:10px">' +
+            '<div style="flex:1">' + fld(x.f_price, '24.90') + '</div>' +
+            '<div style="flex:1">' + fld(x.f_brand, 'Bosch') + '</div></div>' +
+          '<div style="display:flex;align-items:center;gap:10px;margin:4px 0 12px">' +
+            '<button data-tt="uploadBtn" style="font-size:12.5px;padding:8px 12px;border:1px dashed #c3cad4;background:#fff;border-radius:8px;color:' + NAVY + ';cursor:default">' + x.upload_btn + '</button>' +
+            '<div data-tt="thumb" style="display:none;width:38px;height:38px;border-radius:7px;background:#dfe7ef;border:1px solid #cdd6e1;align-items:center;justify-content:center;font-size:16px">🖼️</div></div>' +
+          '<button data-tt="createBtn" class="tk-btn" style="width:100%;font-size:14px;padding:11px;border:none;cursor:default">' + x.create_btn + '</button>' +
+        '</div>' +
+        '<div data-tt="success" style="display:none;position:absolute;inset:0;background:rgba(255,255,255,.94);flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:20px">' +
+          '<div style="width:54px;height:54px;border-radius:50%;background:#16a34a;color:#fff;font-size:28px;display:flex;align-items:center;justify-content:center">✓</div>' +
+          '<div style="font-weight:700;font-size:16px;color:' + NAVY + ';max-width:280px">' + x.success + '</div></div>' +
+      '</div>';
+
+    return [s1, s2, s3, s4, s5, s6];
+  }
+
+  // -------- DOM refs --------
+  var modal, layer, screens, cursor, ripple, caption, barEl, stepLabel, replayBtn, replayLabel;
+  var token = 0, built = false;
+
+  function $(id) { return document.getElementById(id); }
+
+  function build() {
+    modal = $('tour-modal'); if (!modal) return false;
+    layer = $('tour-screen-layer'); screens = $('tour-screens');
+    cursor = $('tour-cursor'); ripple = $('tour-ripple'); caption = $('tour-caption');
+    barEl = $('tour-progress-bar'); stepLabel = $('tour-step-label');
+    replayBtn = $('tour-replay-btn'); replayLabel = $('tour-replay-label');
+    renderScreens();
+    built = true;
+    return true;
+  }
+
+  function renderScreens() {
+    if (!layer) return;
+    var arr = screensHTML(L());
+    layer.innerHTML = arr.map(function (h, i) {
+      return '<div class="tour-screen" data-screen="' + (i + 1) + '">' + h + '</div>';
+    }).join('');
+    if (replayLabel) replayLabel.textContent = L().replay;
+  }
+
+  function applyPanel() {
+    var x = L();
+    var map = { kicker: 'p_kicker', head: 'p_head', sub: 'p_sub', s1: 'p_s1', s2: 'p_s2', s3: 'p_s3', s4: 'p_s4', watch: 'p_watch', skip: 'p_skip' };
+    for (var k in map) {
+      var el = document.querySelector('[data-tp="' + k + '"]');
+      if (el) el.textContent = x[map[k]];
+    }
+  }
+
+  function rectOf(sel) {
+    var el = layer.querySelector('[data-tt="' + sel + '"]');
+    if (!el) return null;
+    var cr = screens.getBoundingClientRect();
+    var er = el.getBoundingClientRect();
+    return { el: el, cx: er.left - cr.left + er.width / 2, cy: er.top - cr.top + er.height / 2, top: er.top - cr.top };
+  }
+
+  function sleep(ms) {
+    var my = token;
+    return new Promise(function (res, rej) {
+      setTimeout(function () { if (my === token) res(); else rej('x'); }, ms);
+    });
+  }
+
+  function showScreen(n) {
+    var all = layer.querySelectorAll('.tour-screen');
+    all.forEach(function (s) { s.classList.toggle('active', s.getAttribute('data-screen') === String(n)); });
+    if (barEl) barEl.style.width = (n / 6 * 100) + '%';
+    if (stepLabel) stepLabel.textContent = L().step + ' ' + n + ' / 6';
+  }
+
+  function moveTo(sel) {
+    var r = rectOf(sel); if (!r) return Promise.resolve();
+    cursor.style.left = (r.cx - 2) + 'px';
+    cursor.style.top = (r.cy - 2) + 'px';
+    return sleep(820);
+  }
+
+  function clickFx(sel) {
+    var r = rectOf(sel); if (!r) return Promise.resolve();
+    ripple.style.left = r.cx + 'px'; ripple.style.top = r.cy + 'px';
+    ripple.classList.remove('go'); void ripple.offsetWidth; ripple.classList.add('go');
+    cursor.classList.add('clicking');
+    if (r.el) { r.el.classList.add('tk-press'); }
+    return sleep(170).then(function () {
+      cursor.classList.remove('clicking');
+      if (r.el) setTimeout(function () { r.el.classList.remove('tk-press'); }, 130);
+    });
+  }
+
+  function showCaption(text, sel) {
+    var r = rectOf(sel);
+    var W = screens.clientWidth;
+    var cx = r ? r.cx : W / 2;
+    cx = Math.max(125, Math.min(W - 125, cx));
+    var top = r ? r.top : 120;
+    caption.textContent = text;
+    caption.style.left = cx + 'px';
+    caption.style.top = Math.max(70, top - 12) + 'px';
+    caption.classList.add('show');
+  }
+  function hideCaption() { caption.classList.remove('show'); }
+
+  function reveal(sel, disp) {
+    var el = layer.querySelector('[data-tt="' + sel + '"]');
+    if (el) el.style.display = disp || 'flex';
+  }
+  function setRole() {
+    var el = layer.querySelector('[data-tt="roleValue"]');
+    if (el) el.textContent = L().role_seller;
+  }
+
+  async function play() {
+    token++; var my = token;
+    try {
+      // reset
+      hideCaption();
+      cursor.style.left = (screens.clientWidth / 2) + 'px';
+      cursor.style.top = (screens.clientHeight / 2) + 'px';
+
+      // Screen 1 — Home
+      showScreen(1); await sleep(500);
+      showCaption(L().cap1, 'becomeSeller'); await sleep(500);
+      await moveTo('becomeSeller'); await clickFx('becomeSeller'); await sleep(700);
+      hideCaption(); await sleep(250);
+
+      // Screen 2 — Register
+      showScreen(2); await sleep(550);
+      showCaption(L().cap2, 'roleSelect');
+      await moveTo('roleSelect'); await clickFx('roleSelect'); setRole(); await sleep(650);
+      await moveTo('registerBtn'); await clickFx('registerBtn'); await sleep(700);
+      hideCaption(); await sleep(250);
+
+      // Screen 3 — Dashboard
+      showScreen(3); await sleep(550);
+      showCaption(L().cap3, 'tileAbo');
+      await moveTo('tileAbo'); await clickFx('tileAbo'); await sleep(700);
+      hideCaption(); await sleep(250);
+
+      // Screen 4 — Subscription
+      showScreen(4); await sleep(550);
+      showCaption(L().cap4, 'proSubscribe');
+      await moveTo('proSubscribe'); await clickFx('proSubscribe');
+      reveal('payToast', 'block'); await sleep(1400);
+      var pt = layer.querySelector('[data-tt="payToast"]'); if (pt) pt.style.display = 'none';
+      reveal('aboActive', 'block'); await sleep(900);
+      hideCaption(); await sleep(250);
+
+      // Screen 5 — Payout
+      showScreen(5); await sleep(550);
+      showCaption(L().cap5, 'regAfrica');
+      await moveTo('regAfrica'); await clickFx('regAfrica');
+      reveal('payoutOk', 'block'); await sleep(1300);
+      hideCaption(); await sleep(250);
+
+      // Screen 6 — Product
+      showScreen(6); await sleep(550);
+      showCaption(L().cap6, 'uploadBtn');
+      await moveTo('uploadBtn'); await clickFx('uploadBtn');
+      reveal('thumb', 'flex'); await sleep(700);
+      await moveTo('createBtn'); await clickFx('createBtn'); await sleep(400);
+      reveal('success', 'flex'); await sleep(300);
+      showCaption(L().cap_end, 'createBtn'); await sleep(2600);
+      hideCaption();
+
+      // loop
+      await sleep(400);
+      if (my === token) play();
+    } catch (e) { /* cancelled */ }
+  }
+
+  function open() {
+    if (!built && !build()) return;
+    renderScreens();
+    modal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    setTimeout(play, 180);
+  }
+  function close() {
+    token++; // cancel running timeline
+    if (modal) modal.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  // -------- Wiring --------
+  document.addEventListener('DOMContentLoaded', function () {
+    build();
+    applyPanel();
+    var openBtn = $('open-tour-btn');
+    if (openBtn) openBtn.addEventListener('click', open);
+    var closeBtn = $('tour-close-btn');
+    if (closeBtn) closeBtn.addEventListener('click', close);
+    if (replayBtn) replayBtn.addEventListener('click', function () { play(); });
+    if (modal) modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+
+    // Sprache mit dem Seiten-Umschalter synchronisieren
+    document.querySelectorAll('.lang-select').forEach(function (sel) {
+      sel.addEventListener('change', function () {
+        if (STR[sel.value]) { lang = sel.value; renderScreens(); applyPanel(); }
+      });
+    });
+  });
+
+  window.AfcTour = { open: open, close: close, setLang: function (l) { if (STR[l]) { lang = l; renderScreens(); applyPanel(); } } };
+})();
+
+</script>
+
+
+<!-- ============================================================
+     ONBOARDING-TOUR MODAL (Screens werden per JS gerendert)
+     ============================================================ -->
+<div id="tour-modal" role="dialog" aria-modal="true">
+  <div class="tour-shell">
+    <button type="button" class="tour-close" id="tour-close-btn" aria-label="Close">&times;</button>
+    <div class="tour-stage-wrap">
+      <div class="tour-bar">
+        <div class="tour-step-label" id="tour-step-label">1 / 6</div>
+        <div class="tour-progress"><i id="tour-progress-bar"></i></div>
+        <button type="button" class="tour-replay" id="tour-replay-btn">&#9654; <span id="tour-replay-label">Replay</span></button>
+      </div>
+      <div class="tour-frame">
+        <div class="tf-top">
+          <div class="tf-dots"><i style="background:#e2526a"></i><i style="background:#f0b429"></i><i style="background:#3fb27f"></i></div>
+          <div class="tf-url"><span style="color:#3fb27f;font-size:10px">&#128274;</span>afcarparts.com</div>
+        </div>
+        <div class="tour-screens" id="tour-screens">
+          <div id="tour-screen-layer" style="position:absolute;inset:0"></div>
+          <div class="tour-cursor" id="tour-cursor">
+            <svg viewBox="0 0 24 24" width="24" height="24"><path d="M4 2 L4 19 L9 14 L12.5 21.5 L15 20.3 L11.6 13 L18 13 Z" fill="#fff" stroke="#14181F" stroke-width="1.3" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="tour-ripple" id="tour-ripple"></div>
+          <div class="tour-caption" id="tour-caption"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
