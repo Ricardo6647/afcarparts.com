@@ -17,7 +17,7 @@ const billingDb = require('../billingDb');
    ------------------------------------------------------------ */
 const REGISTRY = {
   stripe:   './stripe',   // Karten + Abos (Live)
-  pawapay:  './pawapay',  // Afrika: Mobile-Money-Inkasso + Payouts (Adapter folgt in Phase C)
+  pawapay:  './pawapay',  // Afrika: Mobile-Money-Inkasso (Phase C) + Payouts (Phase E)
   payoneer: './payoneer', // Europa & weltweit: Payouts (zunaechst manuell/CSV, Adapter spaeter)
 };
 
