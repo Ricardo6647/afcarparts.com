@@ -123,15 +123,18 @@ async function getActiveSubscription(merchantId) {
   return r.rows[0] || null;
 }
 
-async function setSubscriptionStatusByProviderId(provider, providerSubscriptionId, status, currentPeriodEnd) {
+async function setSubscriptionStatusByProviderId(provider, providerSubscriptionId, status, currentPeriodEnd, cancelAtPeriodEnd) {
+  // cancelAtPeriodEnd: true/false setzt das Flag, undefined/null laesst es unveraendert.
   const r = await query(
     `UPDATE subscriptions
         SET status = $3,
-            current_period_end = COALESCE($4, current_period_end),
+            current_period_end   = COALESCE($4, current_period_end),
+            cancel_at_period_end = COALESCE($5, cancel_at_period_end),
             updated_at = now()
       WHERE provider = $1 AND provider_subscription_id = $2
       RETURNING *`,
-    [provider, providerSubscriptionId, status, currentPeriodEnd || null]
+    [provider, providerSubscriptionId, status, currentPeriodEnd || null,
+     (cancelAtPeriodEnd === true || cancelAtPeriodEnd === false) ? cancelAtPeriodEnd : null]
   );
   return r.rows[0] || null;
 }
