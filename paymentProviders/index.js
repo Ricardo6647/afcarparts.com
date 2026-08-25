@@ -16,10 +16,9 @@ const billingDb = require('../billingDb');
    gibt es eine klare Fehlermeldung statt eines stillen No-Ops.
    ------------------------------------------------------------ */
 const REGISTRY = {
-  stripe:      './stripe',      // Phase 1 (Abo)
-  paystack:    './paystack',    // Phase 2 (Afrika: Inkasso + Split)
-  flutterwave: './flutterwave', // Alternative (ungenutzt)
-  payoneer:    './payoneer',    // Phase 3 (China)
+  stripe:   './stripe',   // Karten + Abos (Live)
+  pawapay:  './pawapay',  // Afrika: Mobile-Money-Inkasso + Payouts (Adapter folgt in Phase C)
+  payoneer: './payoneer', // Europa & weltweit: Payouts (zunaechst manuell/CSV, Adapter spaeter)
 };
 
 const _cache = {};
@@ -48,20 +47,19 @@ function getProvider(name) {
 const SUBSCRIPTION_PROVIDER = 'stripe';
 
 // Fluss 2b: Auszahlung an Haendler nach Haendler-Land.
-const AFRICA_PAYSTACK = ['NG', 'GH', 'KE', 'ZA', 'CI'];
-const CHINA_PAYONEER = ['CN', 'HK'];
+// Afrika (pawaPay-Mobile-Money-Laender) -> pawapay, alle anderen -> payoneer.
+const AFRICA_PAWAPAY = ['BJ','BF','CM','CD','CG','CI','GA','GH','KE','MW','ML','MZ','NG','RW','SN','SL','TZ','UG','ZM','ZW'];
 
 function pickPayoutProvider(merchantCountry) {
   const c = String(merchantCountry || '').toUpperCase();
-  if (CHINA_PAYONEER.includes(c)) return 'payoneer';
-  if (AFRICA_PAYSTACK.includes(c)) return 'paystack';
-  return 'stripe'; // EU/global -> Stripe Connect (Phase 4)
+  if (AFRICA_PAWAPAY.includes(c)) return 'pawapay';
+  return 'payoneer'; // Europa & weltweit (woechentlicher Batch)
 }
 
-// Fluss 2a: Inkasso nach Kunden-Land (afrikanische Karten/Mobile Money -> Paystack).
+// Fluss 2a: Inkasso nach Kunden-Land (afrikanisches Mobile Money -> pawaPay, sonst Stripe-Karte).
 function pickCollectionProvider(customerCountry) {
   const c = String(customerCountry || '').toUpperCase();
-  if (AFRICA_PAYSTACK.includes(c)) return 'paystack';
+  if (AFRICA_PAWAPAY.includes(c)) return 'pawapay';
   return 'stripe';
 }
 
@@ -112,5 +110,5 @@ module.exports = {
   ingestWebhook,
   markWebhookDone,
   // Konstanten exportiert fuer Tests/Transparenz
-  _routing: { SUBSCRIPTION_PROVIDER, AFRICA_PAYSTACK, CHINA_PAYONEER },
+  _routing: { SUBSCRIPTION_PROVIDER, AFRICA_PAWAPAY },
 };
