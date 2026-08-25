@@ -169,6 +169,44 @@ class StripeProvider extends PaymentProvider {
     };
   }
 
+  /* ------------------------------------------------------------
+     VERSIONS-KOMPATIBILITAET (Stripe "Basil" 2025-03-31 und neuer)
+     Ab Basil wurden zwei Felder verschoben, die dieser Adapter braucht.
+     Die Helfer lesen erst den neuen, dann den alten Ort, damit der
+     Code mit alter UND neuer API-Version funktioniert.
+       - Subscription.current_period_end -> SubscriptionItem.current_period_end
+       - Invoice.subscription            -> Invoice.parent.subscription_details.subscription
+     ------------------------------------------------------------ */
+
+  // Liefert das Periodenende eines Subscription-Objekts als ISO-String (oder null).
+  _periodEnd(sub) {
+    if (!sub) return null;
+    let ts = sub.current_period_end || null;           // vor Basil
+    if (!ts && sub.items && Array.isArray(sub.items.data)) {
+      // ab Basil: pro Item. Bei mehreren Items das spaeteste Ende nehmen.
+      for (const it of sub.items.data) {
+        if (it && it.current_period_end && (!ts || it.current_period_end > ts)) {
+          ts = it.current_period_end;
+        }
+      }
+    }
+    return ts ? new Date(ts * 1000).toISOString() : null;
+  }
+
+  // Liefert die Abo-ID aus einem Invoice-Objekt (oder null).
+  _invoiceSubscriptionId(inv) {
+    if (!inv) return null;
+    if (inv.subscription) {                             // vor Basil
+      return typeof inv.subscription === 'string' ? inv.subscription : (inv.subscription.id || null);
+    }
+    const p = inv.parent;                               // ab Basil
+    if (p && p.subscription_details && p.subscription_details.subscription) {
+      const s = p.subscription_details.subscription;
+      return typeof s === 'string' ? s : (s.id || null);
+    }
+    return null;
+  }
+
   // ---- WEBHOOKS ----
 
   // Verifiziert die Signatur und gibt das native Stripe-Event zurueck.
@@ -220,7 +258,7 @@ class StripeProvider extends PaymentProvider {
           plan: (obj.metadata && obj.metadata.plan) ? obj.metadata.plan : null,
           providerSubscriptionId: obj.id,
           status: obj.status, // active | past_due | canceled | unpaid | incomplete
-          currentPeriodEnd: obj.current_period_end ? new Date(obj.current_period_end * 1000).toISOString() : null,
+          currentPeriodEnd: this._periodEnd(obj),
           cancelAtPeriodEnd: !!obj.cancel_at_period_end,
         };
         break;
@@ -238,7 +276,7 @@ class StripeProvider extends PaymentProvider {
         kind = 'subscription';
         data = {
           action: 'payment_failed',
-          providerSubscriptionId: obj.subscription || null,
+          providerSubscriptionId: this._invoiceSubscriptionId(obj),
           status: 'past_due',
         };
         break;
