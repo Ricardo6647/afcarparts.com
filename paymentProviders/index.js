@@ -46,21 +46,26 @@ function getProvider(name) {
 // fuer "Abo aktiv -> Portal-Zugang" gibt.
 const SUBSCRIPTION_PROVIDER = 'stripe';
 
-// Fluss 2b: Auszahlung an Haendler nach Haendler-Land.
-// Afrika (pawaPay-Mobile-Money-Laender) -> pawapay, alle anderen -> payoneer.
-const AFRICA_PAWAPAY = ['BJ','BF','CM','CD','CG','CI','GA','GH','KE','MW','ML','MZ','NG','RW','SN','SL','TZ','UG','ZM','ZW'];
+// EINE Quelle der Wahrheit fuer die pawaPay-Laenderliste: der Adapter.
+// Damit koennen Routing, Server-Validierung und Frontend-Dropdown nicht
+// mehr auseinanderlaufen. Ausschluesse (aktuell NG, GH) stehen dort.
+const PawaPay = require('./pawapay');
 
+// Fluss 2b: Auszahlung an Haendler nach Haendler-Land.
+//   pawaPay-Land aktiv -> pawapay (Mobile Money)
+//   sonst              -> payoneer
+// Das betrifft ausdruecklich auch Nigeria, Ghana, Angola und Suedafrika:
+// diese Haendler werden ueber Payoneer ausgezahlt.
 function pickPayoutProvider(merchantCountry) {
-  const c = String(merchantCountry || '').toUpperCase();
-  if (AFRICA_PAWAPAY.includes(c)) return 'pawapay';
-  return 'payoneer'; // Europa & weltweit (woechentlicher Batch)
+  return PawaPay.isPayoutSupported(merchantCountry) ? 'pawapay' : 'payoneer';
 }
 
-// Fluss 2a: Inkasso nach Kunden-Land (afrikanisches Mobile Money -> pawaPay, sonst Stripe-Karte).
+// Fluss 2a: Inkasso nach Kunden-Land.
+//   pawaPay-Land aktiv -> pawapay (Mobile Money)
+//   sonst              -> stripe  (Karte / Bank / internationale Karten)
+// Nigeria, Ghana, Angola und Suedafrika sind Kartenlaender -> Stripe.
 function pickCollectionProvider(customerCountry) {
-  const c = String(customerCountry || '').toUpperCase();
-  if (AFRICA_PAWAPAY.includes(c)) return 'pawapay';
-  return 'stripe';
+  return PawaPay.isCollectSupported(customerCountry) ? 'pawapay' : 'stripe';
 }
 
 function subscriptionProvider() {
@@ -110,5 +115,9 @@ module.exports = {
   ingestWebhook,
   markWebhookDone,
   // Konstanten exportiert fuer Tests/Transparenz
-  _routing: { SUBSCRIPTION_PROVIDER, AFRICA_PAWAPAY },
+  _routing: {
+    SUBSCRIPTION_PROVIDER,
+    get PAWAPAY_ENABLED()  { return PawaPay.enabledCountries(); },
+    get PAWAPAY_EXCLUDED() { return PawaPay.excludedCountries(); },
+  },
 };
