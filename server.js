@@ -739,7 +739,7 @@ app.get('/api/migrate-orders-fix', async (req, res) => {
    - pickup_stations: Abholstationen je Land/Stadt (Admin pflegt sie)
    Idempotent, mehrfach aufrufbar.
    ============================================================ */
-app.get('/api/migrate-shipping', async (req, res) => {
+app.get('/api/migrate-shipping-v2', require('./migrateShippingV2'));
   if (!process.env.MIGRATION_SECRET) return res.status(503).json({ error: 'MIGRATION_SECRET not set' });
   if (req.query.secret !== process.env.MIGRATION_SECRET) return res.status(401).json({ error: 'Invalid secret' });
 
