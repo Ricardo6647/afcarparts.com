@@ -6706,7 +6706,11 @@ app.put('/api/admin/site-settings/contact-email', requireAdmin, async (req, res)
     res.status(500).json({ error: err.message });
   }
 });
-
+// Versand & Treuhand (Tarife, Tracking-Pruefung, Freigaben, Admin-Board)
+require('./shippingV2Routes')(app, {
+  requireAuth, requireSeller, requireAdmin,
+  resolveSellerScope, blockFinancialInAdminView,
+});
 /* ============================================================
    ERROR HANDLING
    ============================================================ */
