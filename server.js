@@ -21,6 +21,9 @@ try { accountingDb = require('./accountingDb'); }
 catch (e) { console.error('[accounting] Modul nicht ladbar:', e.message); }
 const shippingDb = require('./shippingDb');
 const shippingProviders = require('./shippingProviders');
+const shippingRates = require('./shippingRates');
+const tracking = require('./trackingProviders');
+const escrow = require('./escrow');
    const payments = require('./paymentProviders'); // Phase 0: Fundament + Routing
 // === PATCH 1: Auth-Imports ===
 const cookieParser = require('cookie-parser');
