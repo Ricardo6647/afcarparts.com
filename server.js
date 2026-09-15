@@ -92,19 +92,11 @@ async function handleStripeOrderPaid(evt) {
       await query(`UPDATE products SET stock = GREATEST(COALESCE(stock,0) - $2, 0) WHERE id = $1`, [it.product_id, it.qty || 1]);
     }
   }
-  await query(`UPDATE order_items SET payout_status = 'paid' WHERE order_id = $1`, [orderId]);
-
-  const byMerchant = {};
-  for (const it of items) {
-    if (it.merchant_id) byMerchant[it.merchant_id] = (byMerchant[it.merchant_id] || 0) + (Number(it.payout_amount) || 0);
-  }
-  for (const mid of Object.keys(byMerchant)) {
-    await billingDb.recordPayout({
-      merchantId: parseInt(mid, 10), orderId, provider: 'stripe',
-      providerPayoutId: 'evt_' + evt.eventId + ':' + mid, amount: byMerchant[mid],
-      currency: order.currency, status: 'paid', kind: 'auto_split', raw: { via: 'stripe_webhook' },
-    });
-  }
+    // TREUHAND: Geld bleibt bei uns, bis der Versand nachgewiesen ist.
+  // Freigabe erfolgt je Sendung in escrow.js - bei bestaetigtem Tracking
+  // (Versandanteil) bzw. bei Zustellung/Kundenbestaetigung (Warenwert).
+  await query(`UPDATE order_items SET payout_status = 'held' WHERE order_id = $1 AND payout_status = 'pending'`, [orderId]);
+  console.log('[escrow] Bestellung', orderId, '- Haendleranteil gehalten bis Versandnachweis');
   console.log('[stripe/webhook] Bestellung', orderId, 'via Webhook auf paid gesetzt');
 }
 
