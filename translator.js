@@ -203,4 +203,4 @@ module.exports = {
   autoFillTranslations,
   SUPPORTED_LANGS,
 };
-};
+
