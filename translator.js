@@ -22,7 +22,9 @@
  *   - Längen werden gekappt zum Schutz gegen Rate-Limit-Exhaustion.
  */
 
-const SUPPORTED_LANGS = ['en', 'de', 'fr', 'pt', 'es', 'sw'];
+// Maschinelle Uebersetzung in 8 Sprachen. Lingala (ln) unterstuetzt MyMemory nicht
+// zuverlaessig - dort wird der franzoesische Text verwendet (Geschaeftssprache DR Kongo).
+const SUPPORTED_LANGS = ['en', 'de', 'fr', 'pt', 'es', 'sw', 'ar', 'tr'];
 
 const MAX_TITLE_LEN = 500;
 const MAX_DESC_LEN = 5000;
@@ -187,6 +189,7 @@ async function autoFillTranslations({ defaultLang, title, description }) {
       targetLangs: targets,
     });
     Object.assign(translations, translated);
+    if (!translations.ln && translations.fr) translations.ln = { ...translations.fr };
   } catch (err) {
     console.error('[translator] autoFillTranslations failed:', err.message);
     // Nicht weiterwerfen — Produkt soll trotzdem gespeichert werden
@@ -199,4 +202,5 @@ module.exports = {
   translateProductFields,
   autoFillTranslations,
   SUPPORTED_LANGS,
+};
 };
