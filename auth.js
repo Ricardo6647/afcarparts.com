@@ -2,18 +2,28 @@
 const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = process.env.JWT_SECRET;
-const ACCESS_TOKEN_TTL = '30d';   // Haendler bleiben im Dashboard eingeloggt (war 15m)
+
+// Token-Laufzeiten (per ENV in Render aenderbar, Format wie '30d', '12h', '90m')
+//   Haendler & Kunden: 30 Tage (bleiben im Dashboard eingeloggt)
+//   Admins:            12 Stunden (Admin-Konto kann alles - kurze Laufzeit
+//                      begrenzt den Schaden, falls ein Token abhanden kommt)
+const ACCESS_TOKEN_TTL = process.env.ACCESS_TOKEN_TTL || '30d';
+const ADMIN_TOKEN_TTL  = process.env.ADMIN_TOKEN_TTL  || '12h';
 
 if (!JWT_SECRET) {
   console.error('FATAL: JWT_SECRET environment variable not set');
   process.exit(1);
 }
 
+function ttlFor(user) {
+  return user && user.role === 'admin' ? ADMIN_TOKEN_TTL : ACCESS_TOKEN_TTL;
+}
+
 function signAccessToken(user) {
   return jwt.sign(
     { sub: user.id, email: user.email, role: user.role, name: user.name },
     JWT_SECRET,
-    { expiresIn: ACCESS_TOKEN_TTL }
+    { expiresIn: ttlFor(user) }
   );
 }
 
@@ -51,5 +61,7 @@ function requireRole(...roles) {
     next();
   };
 }
+
+console.log('[auth] Token-Laufzeit: Nutzer', ACCESS_TOKEN_TTL, '| Admin', ADMIN_TOKEN_TTL);
 
 module.exports = { signAccessToken, verifyAccessToken, requireAuth, optionalAuth, requireRole };
